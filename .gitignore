@@ -1,0 +1,10 @@
+xlsx+raw-csv-inputs/
+csv-inputs/*.zip
+csv-inputs/*.csv
+.Rhistory
+Project Requirements Fall 2019.pdf alias
+data-sources-kevin-cullen.md
+dataminingbook.com R code
+.DS_Store
+.DS_Store?
+.Trashes
