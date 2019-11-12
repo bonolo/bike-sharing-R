@@ -4,6 +4,16 @@ library(Hmisc)
 library(dplyr)
 library(ggplot2)
 require(gridExtra)
+library(pastecs)
+options(scipen = 100, digits = 6)
+
+# pastecs library
+# - better (per Leo) summary descriptive statistics
+# 
+# stat.desc() : descriptive statistics from pastecs library
+# - displays results in scientific notation
+# - fix this with options(scipen = 100, digits = 4)
+
 
 # --------- Load CSV file. MySQL export is in one file, with a binary flag ---------------
 # 6493 test.csv
@@ -40,6 +50,8 @@ dim(bikeall.df)
 head(bikeall.df)
 View(bikeall.df)
 
+stat.desc(bikeall.df)
+
 summary(bikeall.df)
 mean(bikeall.dff$count)
 bikeall.df[,c("datetime","count","nationals")]
@@ -61,36 +73,61 @@ glimpse(bikeall.df)
 
 # -------------- Plots -----------------------------------
 
-
-# <<<<<<<<<<<<<< LEADOFF GRAPHIC <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 # Histogram of count
+# <<<<<<<<<<<<<< LEADOFF GRAPHIC <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 ggplot(biketrain.df) + geom_histogram(aes(x = count), color = "black",
                                       fill = "olivedrab",alpha = 0.3, binwidth = 25) +
+  # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
   labs(x = "count (hourly usage count)", y = "Frequency", title = "Histogram of hourly count (usage)")
 
 
-# <<<<<<< VERY GOOD COLORS. USE THIS. <<<<<<<<<<<<<<<<<<<<<<<<
-# Demand by Hour (colored by dayofweek) : JITTERy Scatter Plot
-dayofweek.colors <- c("red", "violet", "purple", "blue", "green", "yellow", "orange") # color per day
-hour.scatter1 <- ggplot(biketrain.df) + geom_point(aes(x = jitter(hour, 2), y = count, colour = biketrain.df$dayofweek), 
-                                                   pch = 20, alpha = 0.5) + 
-  scale_color_manual(values=dayofweek.colors) + 
-  labs(title = "Demand by Hour (colored by dayofweek)", x = "Hour of Day (00-23)", y = "Count", color = "dayofweek")
 
-workingday.colors <- c("purple", "gray") # color per workday/not
-hour.scatter2 <- ggplot(biketrain.df) + geom_point(aes(x = jitter(hour, 2), y = count, colour = biketrain.df$workingday), 
-                                                   pch = 20, alpha = 0.5) + 
-  scale_color_manual(values=workingday.colors) + 
-  labs(title = "Demand by Hour (colored by workingday)", x = "Hour of Day (00-23)", y = "Count", color = "workingday")
+# Demand by Hour (colored by dayofweek) : JITTERy Scatter Plot
+# <<<<<<< VERY GOOD COLORS. USE THIS. <<<<<<<<<<<<<<<<<<<<<<<<
+# make trend line data first
+mean.hourly.count <- aggregate(biketrain.df$count, by = list(biketrain.df$hour), FUN = mean)
+names(mean.hourly.count) <- c("hour", "Meancount")
 
 # Demand by Hour (Mean) : Bar chart
-data.for.plot <- aggregate(biketrain.df$count, by = list(biketrain.df$hour), FUN = mean)
-names(data.for.plot) <- c("hour", "Meancount")
-hour.bar <- ggplot(data.for.plot) + geom_bar(aes(x = hour, y = Meancount), colour = "black", fill = "blue", alpha = 0.5, stat = "identity") + 
+hour.bar <- ggplot(mean.hourly.count) + geom_bar(aes(x = hour, y = Meancount), 
+                                             colour = "black", fill = "blue", 
+                                             alpha = 0.5, stat = "identity") + 
+  # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
   labs(title = "Average Demand by Hour", x = "Hour of Day (00-23)", y = "Mean hourly count")
 hour.bar
+
+# JITTERy Scatter Plot : (colored by dayofweek)
+dayofweek.colors <- c("red", "violet", "purple", "blue", "green", "yellow", "orange") # color per day
+
+hour.scatter1 <- ggplot() +
+  # scatter plot
+  geom_point(data = biketrain.df, aes(x = jitter(hour, 2), y = count, colour = biketrain.df$dayofweek), 
+             pch = 20, alpha = 0.5) +
+  # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
+  scale_color_manual(values=dayofweek.colors) + 
+  labs(title = "Demand by Hour (colored by dayofweek) with mean count trendline", 
+       x = "Hour of Day (00-23)", y = "Count", color = "dayofweek") +
+  # line plot : median.hourly.count
+  geom_line(data = mean.hourly.count, aes(x = hour, y = Meancount), size = 1)
+
+# hour.scatter1
+
+# JITTERy Scatter Plot : (colored by workday/not)
+workingday.colors <- c("purple", "gray") # color per workday/not
+hour.scatter2 <- ggplot() +
+  # scatter plot
+  geom_point(data = biketrain.df, aes(x = jitter(hour, 2), y = count, colour = biketrain.df$workingday), 
+             pch = 20, alpha = 0.5) + 
+  # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
+  scale_color_manual(values=workingday.colors) + 
+  labs(title = "Demand by Hour (colored by workingday) with mean count trendline", 
+       x = "Hour of Day (00-23)", y = "Count", color = "workingday") +
+  # line plot : median.hourly.count
+  geom_line(data = mean.hourly.count, aes(x = hour, y = Meancount), size = 1) +
+  labs(title = "Hourly mean count trendline")
+
 # Place on grid.
-grid.arrange(hour.scatter1, hour.scatter2, hour.bar, nrow=3)
+grid.arrange(hour.scatter1, hour.scatter2, ncol=2)
 
 
 
@@ -107,8 +144,8 @@ ggplot(melted.cor.mat, aes(x = X1, y = X2, fill = value)) +
 
 
 
-# <<<<<<< VERY GOOD COLORS. USE THIS. <<<<<<<<<<<<<<<<<<<<<<<<
 # Demand by Day of Week (with Holidays in red) : JITTERy Scatter Plot
+# <<<<<<< VERY GOOD COLORS. USE THIS. <<<<<<<<<<<<<<<<<<<<<<<<
 holiday.colors <- c("0" = "blue", "1" = "red")
 ggplot(biketrain.df) + geom_point(aes(x = jitter(as.numeric(dayofweek), 2), y = count, colour = biketrain.df$holiday), 
                                   pch = 20, alpha = 0.3) +
@@ -138,26 +175,65 @@ ggplot(data.for.plot) + geom_bar(aes(x = dayofweek, y = Sumcount),
 
 
 
-
-# <<<<<<< VERY GOOD COLORS. Plan vs Log shows heavy use at 31º <<<<<<<<<<<<<<<<<<<<<<<<
 # Demand by Temperature : JITTERy Scatter Plot
+# ------- Usage rarely low when temp is high -----------------------
+# <<<<<<< VERY GOOD COLORS. Plan vs Log shows heavy use at 31º <<<<<<<<<<<<<<<<<<<<<<<<
 # - temp: (double) Celsius
 # - atemp: (double) "feels like" in Celsius
-ggplot(biketrain.df) + geom_point(aes(x = jitter(biketrain.df$atemp, 2), y = count),
+
+# make trend line data first
+mean.temp.count <- aggregate(biketrain.df$count, by = list(biketrain.df$temp), FUN = mean)
+names(mean.temp.count) <- c("temp", "Meancount")
+
+# Demand by Hour (Mean) : Bar chart
+temp.bar <- ggplot(mean.temp.count) + geom_bar(aes(x = temp, y = Meancount), 
+                                                 colour = "black", fill = "blue", 
+                                                 alpha = 0.5, stat = "identity") + 
+  # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
+  labs(title = "Mean count by temp", x = "temp", y = "Mean count")
+temp.bar
+
+
+atemp.scatter <- ggplot() + geom_point(data = biketrain.df, aes(x = jitter(biketrain.df$atemp, 2), y = count),
                                   pch = 20, colour = "orange", alpha = 0.3) +
-  labs(x = "Temp (ºC)", y = "Count");
+  labs(x = "atemp", y = "Count", title = "Usage count by 'Feels Like Temp' (ºC) - Scatterplot - with mean count trendline") + 
+  geom_line(data = mean.temp.count, aes(x = temp, y = Meancount), size = 1)
+
+
+temp.scatter <- ggplot() + geom_point(data = biketrain.df, aes(x = jitter(biketrain.df$temp, 2), y = count),
+                                  pch = 20, colour = "salmon", alpha = 0.3) +
+  labs(x = "temp", y = "Count", title = "Usage count by temp (ºC) - Scatterplot - with mean count trendline") + 
+  geom_line(data = mean.temp.count, aes(x = temp, y = Meancount), size = 1)
+
 # Log scaling on Y
-ggplot(biketrain.df) + geom_point(aes(x = jitter(biketrain.df$atemp, 2), y = count),
+logatemp.scatter <- ggplot() + geom_point(data = biketrain.df, aes(x = jitter(biketrain.df$atemp, 2), y = count),
                                   pch = 20, colour = "orange", alpha = 0.3) +
-  scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + # was (breaks = 10^(-2:2), 
-  # labels = format(10^(-2:2), scientific = FALSE, drop0trailing = TRUE)) +
-  labs(x = "Temp (ºC)", y = "Count");
+  scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) +
+  labs(x = "atemp", y = "Count", title = "Usage count by 'Feels Like Temp'  (ºC) : scale_y_log10 - Scatterplot - with mean count trendline") + 
+  geom_line(data = mean.temp.count, aes(x = temp, y = Meancount), size = 1)
+
+
+ggplot(biketrain.df) + geom_point(aes(x = jitter(biketrain.df$hour, 2), y = temp),
+                                  pch = 20, colour = "salmon4", alpha = 0.3) +
+  labs(x = "Hour", y = "Temp", title = "Temp (ºC) by Hour of day - Scatterplot");
+
+# Mean temp by hour of day
+data.for.plot <- aggregate(biketrain.df$temp, by = list(biketrain.df$hour), FUN = mean)
+names(data.for.plot) <- c("hour", "Meantemp")
+temp.line <- ggplot() + geom_line(data = data.for.plot, aes(x = hour, y = Meantemp),
+                                  stat = "identity") + ylim(0, 41) +
+  labs(title = "temp varies little through day (~ 5ºC)", y = "mean temp", x = "Hour of Day (00-23)")
+
+# Place on grid.
+grid.arrange(atemp.scatter, logatemp.scatter, temp.scatter, temp.line, ncol = 2, nrow = 2)
 
 
 
 
-# <<<<<<< SPRING USE VERY LOW. WAS THIS FIRST SEASON OFFERED? <<<<<<<<<<<<<<<<<<<<<<<<
+
+
 # Demand by Season : Bar chart
+# <<<<<<< SPRING USE VERY LOW. WAS THIS FIRST SEASON OFFERED? <<<<<<<<<<<<<<<<<<<<<<<<
 data.for.plot <- aggregate(biketrain.df$count, by = list(biketrain.df$season), FUN = sum)
 names(data.for.plot) <- c("season", "Sumcount")
 ggplot(data.for.plot) + geom_bar(aes(x = season, y = Sumcount), 
@@ -167,9 +243,8 @@ ggplot(data.for.plot) + geom_bar(aes(x = season, y = Sumcount),
 
 
 
-
-# <<<<<<< HOLIDAY USE TRENDS HIGH. NOTE NON-HOLIDAY CLUSERTED VALUES <<<<<<<<<<<<<<<<<<<<<<<<
 # Demand : Holiday vs. Not : JITTERy Scatter Plot
+# <<<<<<< HOLIDAY USE TRENDS HIGH. NOTE NON-HOLIDAY CLUSERTED VALUES <<<<<<<<<<<<<<<<<<<<<<<<
 ggplot(biketrain.df) + geom_point(aes(x = jitter(as.numeric(biketrain.df$holiday), 3), y = count),
                                   pch = 20, colour = "rosybrown2", alpha = 0.5) + 
   labs(x = "1 = Holiday, 0 = Not", y = "Count")
@@ -186,20 +261,44 @@ ggplot(biketrain.df) + geom_boxplot(aes(x = holiday, y = count),
 
 
 
-# <<<<<<< WIND KILLS DEMAND (Or is it never windy?) <<<<<<<<<<<<<<<<<<<<<<<<
+
 # Demand by Wind Speed : Scatter Plot
+# <<<<<<< WIND KILLS DEMAND (Or is it never windy?) <<<<<<<<<<<<<<<<<<<<<<<<
 # only 30 distinct values, makes this goofy.
-scatter <- ggplot(biketrain.df) + geom_point(aes(x = jitter(biketrain.df$windspeed, 6), y = count),
-                                             pch = 20, colour = "green4", alpha = 0.3) + 
+
+
+mean.windspeed.count <- aggregate(biketrain.df$count, by = list(biketrain.df$windspeed), FUN = mean)
+names(mean.windspeed.count) <- c("windspeed", "Meancount")
+
+# Demand by Hour (Mean) : Bar chart
+windspeed.bar <- ggplot(mean.windspeed.count) + geom_bar(aes(x = windspeed, y = Meancount), 
+                                               colour = "black", fill = "blue", 
+                                               alpha = 0.5, stat = "identity") + 
+  # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
+  labs(title = "Mean count by windspeed", x = "windspeed", y = "Mean count")
+windspeed.bar
+
+
+windspeed.scatter <- ggplot() + geom_point(data = biketrain.df, aes(x = jitter(biketrain.df$windspeed, 6), y = count),
+                                      pch = 20, colour = "green4", alpha = 0.3) + 
   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + # Good with our without.
   # scale_x_log10(breaks = c(2, 4, 8, 16, 32, 64)) + 
-  labs(x = "Wind Speed (units not provided)", y = "Count")
-# Histogram of wind speed
+  labs(x = "Wind Speed (units not provided)", y = "Count", title = "Count by Wind Speed - with mean count trendline") +
+  geom_line(data = mean.windspeed.count, aes(x = windspeed, y = Meancount), size = 1)
+
+logwindspeed.scatter <- ggplot() + geom_point(data = biketrain.df, aes(x = jitter(biketrain.df$windspeed, 6), y = count),
+                                      pch = 20, colour = "green4", alpha = 0.3) + 
+  scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + # Good with our without.
+  # scale_x_log10(breaks = c(2, 4, 8, 16, 32, 64)) + 
+  labs(x = "Wind Speed (units not provided)", y = "Count", title = "Count by Wind Speed - scale_y_log10 - with mean count trendline") +
+  geom_line(data = mean.windspeed.count, aes(x = windspeed, y = Meancount), size = 1)
+
+# Histogram of windspeed speed
 histo <- ggplot(biketrain.df) + geom_histogram(aes(x = windspeed), color = "black",
                                                fill = "green4",alpha = 0.3, binwidth = 1) +
-  labs(x = "wind speed (unknown units)", y = "Frequency")
+  labs(x = "windspeed (unknown units)", y = "Frequency", title = "Histogram: windspeed")
 # Place on grid.
-grid.arrange(scatter, histo, nrow=2)
+grid.arrange(windspeed.scatter, logwindspeed.scatter, histo, ncol=3)
 
 
 # <<<<<<<< CONGRESS IN SESSION... LOWER DEMAND ??? <<<<<<<<<<<<<<<<<<<<<
