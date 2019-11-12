@@ -42,11 +42,13 @@ Predict demand for bicycles, using time (date, time, holiday, weekday, season) a
 
 Downloaded CSV files for training and test data from <https://www.kaggle.com/c/bike-sharing-demand/overview>.
 
+I extracted separate fields like "hour (of day)", "dayofweek (1-7)" from the built-in datetime hourly time stamp.
+
 ### Additional Data Series I Found and Transformed
 
 Some of this was ugly cut & paste from PDFs or HTML into Excel. I used Pentaho/Vandara PDI to load CSVs into a MySQL database for transformations and joins via SQL.
 
-I pulled the following subsets together via SQL SELECT with several OUTER JOINs and added derived fields like "hour (of day)", "dayofweek (1-7)". I exported train and test CSV files with MySQL's SELECT... INTO OUTFILE syntax.
+I pulled the following subsets together via SQL SELECT with several OUTER JOINs. I exported train and test CSV files with MySQL's SELECT... INTO OUTFILE syntax.
 
 Related files...
 
@@ -143,6 +145,53 @@ Variables
 
 
 ## Discussion of preliminary data exploration and findings
+
+The data was clean. The only missing data was the counts in the test data set.
+
+Target variable `count` ranged from 1 to 977
+  - median: 145
+  - mean: 191
+  - distribution: heavily right-tailed; peaks at far left (x = 1 to 5)
+
+Kaggle provided "datetime", an hourly timestamp. I extracted hour and dayofweek from that because I expected those separate items to be influential.
+
+There are significant usage peaks at 08:00 and 17:00 (presumably for rush hour).
+
+Total demand varied little by day of week, but I dug deeper and discovered that timing of demand did vary by day. My scatterplots show weekend usage has two different daily peaks which are broader and less distinct: 23:00 - 00:00 and 10:00 to 15:00 (possibly because people are cycling home from late night events and getting up late the next day).
+
+![Demand by hour and dayofweek](plots/demand-by-hour+dayofweek.png "Demand by hour and dayofweek")
+
+
+I tried several ways to examine the holiday variable. My box plots did the best job of showing little demand difference for holiday vs. non-holiday.
+
+![Boxplot: Holiday](plots/holiday-boxplot.png "Boxplot: Holiday")
+
+Weather and season seemed to influence demand. However, spring usage was much lower than all other seasons, which made me wonder if that was when the service launched.
+  
+![Boxplot: Weather and Season](plots/weather-season-boxplot.png "Boxplot: Weather and Season")
+
+
+- temp: (double) Celsius
+- atemp: (double) "feels like" in Celsius
+- humidity (integer) - relative humidity
+  - this might be a bit redundant, as weather and atemp could capture this to a degree
+- windspeed (double) wind speed, though units are not provided
+
+- house
+- senate
+
+Pro sports events (home games) had a noted impact on usage, especially when the Washington National baseball team is playing. I decided to make my own `sporting_event` variable to combine all four teams for which I had data.
+
+![Boxplot: Sporting Events](plots/sporting-event-boxplot.png "Boxplot: Sporting Events")
+
+
+
+- cus_session
+- au_session
+- howard_session
+- session_count
+- session_any
+
 
 
 

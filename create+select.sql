@@ -196,7 +196,7 @@ FROM bike_sharing.sporting_event;
     , 1 AS sporting_event
     FROM bike_sharing.sporting_event
     GROUP BY `datetime`
-;
+    ;
 
 
 
@@ -206,8 +206,8 @@ FROM bike_sharing.sporting_event;
  */
  -- Get a row of headers so we can put them in CSV export
 SELECT 'train', 'datetime', 'hour', 'dayofweek', 'season', 'holiday', 'workingday', 'weather', 'temp', 'atemp'
-, 'humidity', 'windspeed', 'casual', 'registered', 'count', 'house', 'senate', 'nationals', 'united', 'wizards'
-, 'sporting_event', 'cua_session', 'au_session', 'howard_session', 'session_count', 'session_any'
+, 'humidity', 'windspeed', 'casual', 'registered', 'count', 'house', 'senate', 'capitals', 'nationals'
+, 'united', 'wizards', 'sporting_event', 'cua_session', 'au_session', 'howard_session', 'session_count', 'session_any'
 
 -- UNION the header row with the data
 UNION ALL
@@ -229,6 +229,7 @@ SELECT IF(DAYOFMONTH(kaggle_data.`datetime`) < 20, 1, 0) AS train
 , kaggle_data.`count`
 , IFNULL(house_senate.house, 0) AS house
 , IFNULL(house_senate.senate, 0) AS senate
+, IFNULL(sp_event.capitals, 0) AS capitals
 , IFNULL(sp_event.nationals, 0) AS nationals
 , IFNULL(sp_event.united, 0) AS united
 , IFNULL(sp_event.wizards, 0) AS wizards
