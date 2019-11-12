@@ -131,10 +131,10 @@ ggplot(data.for.plot) + geom_bar(aes(x = dayofweek, y = Sumcount),
 # -- From book. Meh so far ---
 # use plot() to generate a matrix of 4X4 panels with variable name on the diagonal, 
 # and scatter plots in the remaining panels.
-plot(biketrain.df[, c(3, 4, 25, 15)])
-# alternative, nicer plot
-library(GGally)
-ggpairs(biketrain.df[, c("hour", "dayofweek", "session_any", "count")])
+# plot(biketrain.df[, c(3, 4, 25, 15)])
+# # alternative, nicer plot
+# library(GGally)
+# ggpairs(biketrain.df[, c("hour", "dayofweek", "session_any", "count")])
 
 
 
@@ -202,7 +202,7 @@ histo <- ggplot(biketrain.df) + geom_histogram(aes(x = windspeed), color = "blac
 grid.arrange(scatter, histo, nrow=2)
 
 
-# <<<<<<<< LEGISLATIONS IN SESSION... LOWER DEMAND ??? <<<<<<<<<<<<<<<<<<<<<
+# <<<<<<<< CONGRESS IN SESSION... LOWER DEMAND ??? <<<<<<<<<<<<<<<<<<<<<
 ## side-by-side boxplots
 # use par() to split the plots into panels.
 par(mfcol = c(1, 2))
@@ -211,10 +211,11 @@ boxplot(biketrain.df$count ~ biketrain.df$house, xlab = "house", ylab = "count")
 
 # <<<<<<<< GAME ON? ... INCREASED DEMAND !!!!! <<<<<<0<<<<<<<<<<<<<<<<<<<<<
 ## side-by-side boxplots
-par(mfcol = c(1, 3))
+par(mfcol = c(1, 4))
 boxplot(biketrain.df$count ~ biketrain.df$nationals, xlab = "nationals", ylab = "count")
 boxplot(biketrain.df$count ~ biketrain.df$wizards, xlab = "wizards", ylab = "count")
 boxplot(biketrain.df$count ~ biketrain.df$united, xlab = "united", ylab = "count")
+boxplot(biketrain.df$count ~ biketrain.df$sporting_event, xlab = "sporting_event", ylab = "count")
 
 # <<<<<<<< UNIVERSITIES IN SESSION... LOWER DEMAND ??? <<<<<<<<<<<<<<<<<<<<<
 ## side-by-side boxplots
@@ -226,6 +227,8 @@ boxplot(biketrain.df$count ~ biketrain.df$session_count, xlab = "session_count",
 boxplot(biketrain.df$count ~ biketrain.df$au_session, xlab = "au_session", ylab = "count")
 hist(as.numeric(biketrain.df$session_count), xlab = "session_count", main = "Histogram of session_count")
 
-
-boxplot(biketrain.df$count ~ biketrain.df$weather, xlab = "weather", ylab = "count", main = "Histogram: count by weather")
+## side-by-side boxplots
+par(mfcol = c(1, 2))
+boxplot(biketrain.df$count ~ biketrain.df$weather, xlab = "weather", ylab = "count", main = "Histogram: count by weather",
+        sub = "4 = Heavy Rain + Ice Pellets + Thunderstorm + Mist, Snow + Fog")
 boxplot(biketrain.df$count ~ biketrain.df$season, xlab = "season", ylab = "count", main = "Histogram: count by season")

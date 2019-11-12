@@ -96,7 +96,16 @@ These were in all sorts of formats. Once the CSVs were in MySQL, I massaged and 
 
 Using start times from the CSV files and typical game lengths, I used SQL to set the binary flag to TRUE for hours during which games were being held, along with a bit of buffer on either side for travel to and from the games. I excluded away games for all.
 
-##### Washington Capitals (NHL) - Never found an easy source
+##### Washington Capitals (NHL) [capitals-schedule-2011.csv]
+
+Gathered from: <https://www.nhl.com/capitals/news/capitals-announce-composite-2010-11-television-schedule/c-537574> and <https://www.hockey-reference.com/teams/WSH/2012_games.html>
+
+Variables
+
+    capitals    binary
+    caps_date   iso date
+    caps_time   (HH:mm:ss)
+
 
 ##### Washington Nationals (MLB) [nationals-schedule-2011.csv]
 

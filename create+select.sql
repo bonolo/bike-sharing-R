@@ -72,8 +72,21 @@ CREATE TABLE bike_sharing.university_sessions
 
 select * from bike_sharing.university_sessions;
 
--- data from nationals-schedule-2011.csv
 
+
+-- data from capitals-schedule-2011.csv
+CREATE TABLE bike_sharing.capitals_schedule
+(
+  capitals TINYINT
+, caps_date DATETIME
+, caps_time TIME
+)
+;
+
+SELECT * FROM bike_sharing.capitals_schedule;
+
+
+-- data from nationals-schedule-2011.csv
 CREATE TABLE bike_sharing.nationals_schedule
 (
       Date INT
@@ -85,7 +98,6 @@ CREATE TABLE bike_sharing.nationals_schedule
 select * from bike_sharing.nationals_schedule;
 
 -- data from dc_united-2011-schedule.csv
-
 CREATE TABLE bike_sharing.dc_united_schedule
 (
     DC_United_Game_date DATETIME
@@ -113,6 +125,8 @@ SELECT * from bike_sharing.wizards_schedule;
 CREATE TABLE bike_sharing.sporting_event
 (
     `datetime` DATETIME
+    # , sporting_event TINYINT
+    , capitals TINYINT
     , nationals TINYINT
     , united TINYINT
     , wizards TINYINT
@@ -121,6 +135,12 @@ CREATE TABLE bike_sharing.sporting_event
 TRUNCATE TABLE bike_sharing.sporting_event;
 
 SELECT * from bike_sharing.sporting_event ORDER BY datetime;
+
+INSERT INTO sporting_event (`datetime`, capitals)
+SELECT CONCAT(LEFT(caps_date, 10), " ", DATE_FORMAT(caps_time, "%H:00:00")) AS `datetime`
+, 1 AS capitals
+FROM capitals_schedule
+ORDER BY caps_date;
 
 INSERT INTO sporting_event (`datetime`, united)
 SELECT CONCAT(LEFT(DC_United_Game_date, 10), " ", DATE_FORMAT(time_ET, "%H:00:00")) AS `datetime`
@@ -149,31 +169,35 @@ FROM bike_sharing.nationals_schedule
  * INSERT records for the full length of the event, plus pading 
  * of an hour before and after for transit, parking, seating.
  * 
- * Average NBA game length is ~2.25 hours. MLS 110 min. Baseball: 3 hours.
+ * Average NBA game length is ~2.25 hours. MLS 110 min. 
+ * Hockey 2.5 hours. Baseball: 3 hours.
  * Baseball games are longer, but don't people often leave early?
  *******************************/
 
 -- 1 hour beforehand for transit/parking/seating
-INSERT INTO bike_sharing.sporting_event (`datetime`, nationals, united, wizards)
+INSERT INTO bike_sharing.sporting_event (`datetime`, capitals, nationals, united, wizards)
 SELECT DATE_ADD(datetime, INTERVAL -1 HOUR) AS `datetime`
-    , nationals, united, wizards
+    , capitals, nationals, united, wizards
 FROM bike_sharing.sporting_event;
 ;
 -- Add the 2nd hour of the game and 1 hour to get from stadium to home.
 INSERT INTO bike_sharing.sporting_event (`datetime`, nationals, united, wizards)
 SELECT DATE_ADD(datetime, INTERVAL 2 HOUR) AS `datetime`
-    , nationals, united, wizards
+    , capitals, nationals, united, wizards
 FROM bike_sharing.sporting_event;
 ;
 
 -- Group stuff together, for overlapping events;
     SELECT `datetime`
+    , COUNT(capitals) AS capitals
     , COUNT(nationals) AS nationals
     , COUNT(united) AS united
     , COUNT(wizards) AS wizards
+    , 1 AS sporting_event
     FROM bike_sharing.sporting_event
     GROUP BY `datetime`
 ;
+
 
 
 /****************************
@@ -183,7 +207,7 @@ FROM bike_sharing.sporting_event;
  -- Get a row of headers so we can put them in CSV export
 SELECT 'train', 'datetime', 'hour', 'dayofweek', 'season', 'holiday', 'workingday', 'weather', 'temp', 'atemp'
 , 'humidity', 'windspeed', 'casual', 'registered', 'count', 'house', 'senate', 'nationals', 'united', 'wizards'
-, 'cua_session', 'au_session', 'howard_session', 'session_count', 'session_any'
+, 'sporting_event', 'cua_session', 'au_session', 'howard_session', 'session_count', 'session_any'
 
 -- UNION the header row with the data
 UNION ALL
@@ -208,6 +232,7 @@ SELECT IF(DAYOFMONTH(kaggle_data.`datetime`) < 20, 1, 0) AS train
 , IFNULL(sp_event.nationals, 0) AS nationals
 , IFNULL(sp_event.united, 0) AS united
 , IFNULL(sp_event.wizards, 0) AS wizards
+, IFNULL(sp_event.sporting_event, 0) AS sporting_event
 , IFNULL(university_sessions.cua_session, 0) AS cus_session
 , IFNULL(university_sessions.au_session, 0) AS au_session
 , IFNULL(university_sessions.howard_session, 0) AS howard_session
@@ -224,6 +249,7 @@ LEFT OUTER JOIN
     , COUNT(nationals) AS nationals
     , COUNT(united) AS united
     , COUNT(wizards) AS wizards
+    , 1 AS sporting_event
     FROM bike_sharing.sporting_event
     GROUP BY `datetime`
 ) AS sp_event
