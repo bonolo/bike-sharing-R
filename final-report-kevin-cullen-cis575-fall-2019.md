@@ -85,18 +85,19 @@ Variables...
 
 Who drives to a pro sporting event? So, I captured (in CSV files) time windows for professional sporting events held within the geographic footprint of the bike share service. I excluded the Washington Redskins because the play in Landover, Maryland... outside the bike sharing service area.
 
-These were in all sorts of formats. Once the CSVs were in MySQL, I massaged and joined them into a common table.
+Formats varied greatly. Once the CSVs were in MySQL, I massaged and joined them into a common table.
 
     +-----------+----------+
     | Field     | Type     |
     +-----------+----------+
     | datetime  | datetime | To join with the Kaggle hourly time data.
-    | nationals | boolean  | Is there a game at this time?
+    | capitals  | boolean  | Is there a game at this time?
+    | nationals | boolean  | Game?
     | united    | boolean  | Game?
     | wizards   | boolean  | Game?
     +-----------+----------+
 
-Using start times from the CSV files and typical game lengths, I used SQL to set the binary flag to TRUE for hours during which games were being held, along with a bit of buffer on either side for travel to and from the games. I excluded away games for all.
+Using start times from the CSV files + typical game lengths, I used SQL to set the binary flag to TRUE for hours during which games were being held, along with a bit of buffer on either side for travel to and from the games. I excluded away games for all.
 
 ##### Washington Capitals (NHL) [capitals-schedule-2011.csv]
 
@@ -146,12 +147,14 @@ Variables
 
 ## Discussion of preliminary data exploration and findings
 
-The data was clean. The only missing data was the counts in the test data set.
+The data was clean. The only missing values were the counts in the test data set.
 
 Target variable `count` ranged from 1 to 977
   - median: 145
   - mean: 191
   - distribution: heavily right-tailed; peaks at far left (x = 1 to 5)
+
+![Histogram of count](plots/count-histogram.png "Histogram of count")
 
 Kaggle provided "datetime", an hourly timestamp. I extracted hour and dayofweek from that because I expected those separate items to be influential.
 
@@ -162,7 +165,7 @@ Total demand varied little by day of week, but I dug deeper and discovered that 
 ![Demand by hour and dayofweek](plots/demand-by-hour+dayofweek.png "Demand by hour and dayofweek")
 
 
-I tried several ways to examine the holiday variable. My box plots did the best job of showing little demand difference for holiday vs. non-holiday.
+I tried several ways to examine the holiday variable. My box plots did the best job of showing little demand difference for holiday vs. non-holiday (though holidays lacked the huge outliers found on other days).
 
 ![Boxplot: Holiday](plots/holiday-boxplot.png "Boxplot: Holiday")
 
@@ -170,20 +173,30 @@ Weather and season seemed to influence demand. However, spring usage was much lo
   
 ![Boxplot: Weather and Season](plots/weather-season-boxplot.png "Boxplot: Weather and Season")
 
+My observations about temperature were
+- Usage is rarely low when the temperature is very high
+  - (and rarely high when temperature is very low)
+- Usage increases with temperature until about 35ºF
+- Temperature in DC varies only ~5ºC during the day.
+- The temp and atemp variables only ranged from 0.82 to 41 and 0 to 50 respectively. Presumably, the original data was transformed to eliminate temperatures below 0 Celcius. (Washington DC has plenty of hours/year below freezing.)
 
-- temp: (double) Celsius
-- atemp: (double) "feels like" in Celsius
-- humidity (integer) - relative humidity
-  - this might be a bit redundant, as weather and atemp could capture this to a degree
+I did not analyze humidity, as it seemed redundant. The atemp and weather variables may capture this to a degree.
+
+![Usage by temperature](plots/usage-by-temp.png "Usage by temperature")
+
+
+
 - windspeed (double) wind speed, though units are not provided
+
+
 
 - house
 - senate
 
-Pro sports events (home games) had a noted impact on usage, especially when the Washington National baseball team is playing. I decided to make my own `sporting_event` variable to combine all four teams for which I had data.
+Pro sports events (home games) had a noted impact on usage, especially when the Washington National baseball team is playing. I decided to make my own `sporting_event` variable to combine all four teams for which I had data. However... the spike in demand may just be because games tend to occur during evening rush hour.
 
 ![Boxplot: Sporting Events](plots/sporting-event-boxplot.png "Boxplot: Sporting Events")
-
+![Boxplot: Sporting Events during 15:00 - 20:59](plots/sporting-events-evening-rush.png "Boxplot: Sporting Events during 15:00 - 20:59")
 
 
 - cus_session

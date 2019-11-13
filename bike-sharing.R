@@ -31,9 +31,11 @@ bikeall.df[,'workingday']<-factor(bikeall.df[,'workingday'])
 bikeall.df[,'weather']<-factor(bikeall.df[,'weather'])
 bikeall.df[,'house']<-factor(bikeall.df[,'house'])
 bikeall.df[,'senate']<-factor(bikeall.df[,'senate'])
+bikeall.df[,'capitals']<-factor(bikeall.df[,'capitals'])
 bikeall.df[,'nationals']<-factor(bikeall.df[,'nationals'])
 bikeall.df[,'united']<-factor(bikeall.df[,'united'])
 bikeall.df[,'wizards']<-factor(bikeall.df[,'wizards'])
+bikeall.df[,'sporting_event']<-factor(bikeall.df[,'sporting_event'])
 bikeall.df[,'cua_session']<-factor(bikeall.df[,'cua_session'])
 bikeall.df[,'au_session']<-factor(bikeall.df[,'au_session'])
 bikeall.df[,'howard_session']<-factor(bikeall.df[,'howard_session'])
@@ -74,11 +76,12 @@ glimpse(bikeall.df)
 
 # Histogram of count
 # <<<<<<<<<<<<<< LEADOFF GRAPHIC <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-ggplot(biketrain.df) + geom_histogram(aes(x = count), color = "black",
+ggplot() + geom_histogram(data = biketrain.df, aes(x = count), color = "black",
                                       fill = "olivedrab",alpha = 0.3, binwidth = 25) +
   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
-  labs(x = "count (hourly usage count)", y = "Frequency", title = "Histogram of hourly count (usage)")
-
+  labs(x = "count (hourly usage count)", y = "Frequency", title = "Histogram of hourly count (usage)") +
+  geom_vline(aes(xintercept = median(biketrain.df$count), colour = "median")) + 
+  geom_vline(aes(xintercept = mean(biketrain.df$count), colour = "mean"))
 
 
 # Demand by Hour (colored by dayofweek) : JITTERy Scatter Plot
@@ -122,11 +125,11 @@ hour.scatter1 <- ggplot() +
 # hour.scatter1
 
 # JITTERy Scatter Plot : (color: workingday)
-workingday.colors <- c("purple", "gray") # color per workday/not
+workingday.colors <- c("goldenrod", "darkviolet") # color per workday/not
 hour.scatter2 <- ggplot() +
   # scatter plot
   geom_point(data = biketrain.df, aes(x = jitter(hour, 2), y = count, colour = biketrain.df$workingday), 
-             pch = 20, alpha = 0.5) + 
+             pch = 20, alpha = 0.3) + 
   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
   scale_color_manual(values=workingday.colors) + 
   labs(title = "Demand by Hour (color: workingday) w/ median trendline", 
@@ -179,31 +182,30 @@ temp.bar <- ggplot(median.temp.count) + geom_bar(aes(x = temp, y = mediancount),
   labs(title = "median count by temp", x = "temp", y = "median count")
 temp.bar
 
-
+# Scatter Plots: Usage by Temperature with median usage trendline
+# atemp
 atemp.scatter <- ggplot() + geom_point(data = biketrain.df, aes(x = jitter(biketrain.df$atemp, 2), y = count),
                                   pch = 20, colour = "orange", alpha = 0.3) +
-  labs(x = "atemp", y = "Count", title = "Usage count by 'Feels Like Temp' (ºC) - Scatterplot - with median count trendline") + 
+  labs(x = "atemp", y = "Count", title = "Usage by 'Feels Like Temp' (ºC) - w/ median trendline") + 
   geom_line(data = median.temp.count, aes(x = temp, y = mediancount), size = 1)
-
-
+# temp
 temp.scatter <- ggplot() + geom_point(data = biketrain.df, aes(x = jitter(biketrain.df$temp, 2), y = count),
                                   pch = 20, colour = "salmon", alpha = 0.3) +
-  labs(x = "temp", y = "Count", title = "Usage count by temp (ºC) - Scatterplot - with median count trendline") + 
+  labs(x = "temp", y = "Count", title = "Usage by temp (ºC) - w/ median trendline") + 
   geom_line(data = median.temp.count, aes(x = temp, y = mediancount), size = 1)
-
-# Log scaling on Y
+# Log scaling on Y = temp
 logatemp.scatter <- ggplot() + geom_point(data = biketrain.df, aes(x = jitter(biketrain.df$atemp, 2), y = count),
                                   pch = 20, colour = "orange", alpha = 0.3) +
   scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) +
-  labs(x = "atemp", y = "Count", title = "Usage count by 'Feels Like Temp'  (ºC) : scale_y_log10 - Scatterplot - with median count trendline") + 
+  labs(x = "atemp", y = "Count", title = "Usage by 'Feels Like Temp'  (ºC) scale_y_log10 - w/ median trendline") + 
   geom_line(data = median.temp.count, aes(x = temp, y = mediancount), size = 1)
 
-
+# Temp by hour of day : Scatter Plot
 ggplot(biketrain.df) + geom_point(aes(x = jitter(biketrain.df$hour, 2), y = temp),
                                   pch = 20, colour = "salmon4", alpha = 0.3) +
   labs(x = "Hour", y = "Temp", title = "Temp (ºC) by Hour of day - Scatterplot");
 
-# median temp by hour of day
+# Median temp by hour of day: Line Plot
 data.for.plot <- aggregate(biketrain.df$temp, by = list(biketrain.df$hour), FUN = median)
 names(data.for.plot) <- c("hour", "mediantemp")
 temp.line <- ggplot() + geom_line(data = data.for.plot, aes(x = hour, y = mediantemp),
@@ -306,6 +308,12 @@ boxplot(biketrain.df$count ~ biketrain.df$wizards, xlab = "wizards", ylab = "cou
 boxplot(biketrain.df$count ~ biketrain.df$united, xlab = "united", ylab = "count", col = "slateblue")
 boxplot(biketrain.df$count ~ biketrain.df$sporting_event, xlab = "sporting_event", ylab = "count", col = "darkred")
 
+eveningrush.train.df <- subset(biketrain.df, hour > 14 & hour < 21)
+boxplot(eveningrush.train.df$count ~ eveningrush.train.df$sporting_event, 
+        xlab = "sporting_event", ylab = "count", 
+        col = "darkred", main = "Sporting events (only 15:00 - 20:59)")
+
+
 # <<<<<<<< UNIVERSITIES IN SESSION... LOWER DEMAND ??? <<<<<<<<<<<<<<<<<<<<<
 ## side-by-side boxplots
 par(mfcol = c(2, 3))
@@ -324,12 +332,12 @@ hist(as.numeric(biketrain.df$session_count), xlab = "session_count", main = "His
 # boxplot(biketrain.df$count ~ biketrain.df$season, xlab = "season", ylab = "count", main = "count by season")
 weather.box <- ggplot(biketrain.df) + 
   geom_boxplot(aes(x = weather, y = count), pch = 20, color = "black", fill = "blue", alpha = 0.4) + 
-  labs(x = "weather (1-4)", y = "Count", title = "Usage by Holiday/Not Holiday",
+  labs(x = "weather (1-4)", y = "Count", title = "Usage by weather",
        sub = "4 = Heavy Rain + Ice Pellets + Thunderstorm + Mist, Snow + Fog")
 
 season.box <- ggplot(biketrain.df) + 
   geom_boxplot(aes(x = season, y = count), pch = 20, color = "black", fill = "green", alpha = 0.4) + 
-  labs(x = "season (1 = Spr, 2 = Sum, 3 = Fall, 4 = Win)", y = "Count", title = "Usage by Season")
+  labs(x = "season (1 = Spr, 2 = Sum, 3 = Fall, 4 = Win)", y = "Count", title = "Usage by season")
 
 
 # Place on grid.
