@@ -308,10 +308,10 @@ boxplot(biketrain.df$count ~ biketrain.df$wizards, xlab = "wizards", ylab = "cou
 boxplot(biketrain.df$count ~ biketrain.df$united, xlab = "united", ylab = "count", col = "slateblue")
 boxplot(biketrain.df$count ~ biketrain.df$sporting_event, xlab = "sporting_event", ylab = "count", col = "darkred")
 
-eveningrush.train.df <- subset(biketrain.df, hour > 14 & hour < 21)
-boxplot(eveningrush.train.df$count ~ eveningrush.train.df$sporting_event, 
+sportinghours.train.df <- subset(biketrain.df, (hour > 17) | (hour > 11 & hour < 16))
+boxplot(sportinghours.train.df$count ~ sportinghours.train.df$sporting_event, 
         xlab = "sporting_event", ylab = "count", 
-        col = "darkred", main = "Sporting events (only 15:00 - 20:59)")
+        col = "darkred", main = "sporting_event: comparable times", sub = "(noon - 15:59 or after 17:59)")
 
 
 # <<<<<<<< UNIVERSITIES IN SESSION... LOWER DEMAND ??? <<<<<<<<<<<<<<<<<<<<<

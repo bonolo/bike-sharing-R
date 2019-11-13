@@ -181,11 +181,17 @@ SELECT DATE_ADD(datetime, INTERVAL -1 HOUR) AS `datetime`
 FROM bike_sharing.sporting_event;
 ;
 -- Add the 2nd hour of the game and 1 hour to get from stadium to home.
-INSERT INTO bike_sharing.sporting_event (`datetime`, nationals, united, wizards)
+INSERT INTO bike_sharing.sporting_event (`datetime`, capitals, nationals, united, wizards)
 SELECT DATE_ADD(datetime, INTERVAL 2 HOUR) AS `datetime`
     , capitals, nationals, united, wizards
 FROM bike_sharing.sporting_event;
 ;
+
+SELECT MID(`datetime`, 12, 2) AS start_hour
+, COUNT(*) AS frequency
+FROM bike_sharing.sporting_event
+GROUP BY start_hour
+ORDER BY start_hour;
 
 -- Group stuff together, for overlapping events;
     SELECT `datetime`
@@ -247,6 +253,7 @@ LEFT OUTER JOIN bike_sharing.house_senate
 LEFT OUTER JOIN
 (
     SELECT `datetime`
+    , COUNT(capitals) AS capitals
     , COUNT(nationals) AS nationals
     , COUNT(united) AS united
     , COUNT(wizards) AS wizards

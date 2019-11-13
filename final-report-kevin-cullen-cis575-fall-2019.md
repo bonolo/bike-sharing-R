@@ -193,10 +193,10 @@ I did not analyze humidity, as it seemed redundant. The atemp and weather variab
 - house
 - senate
 
-Pro sports events (home games) had a noted impact on usage, especially when the Washington National baseball team is playing. I decided to make my own `sporting_event` variable to combine all four teams for which I had data. However... the spike in demand may just be because games tend to occur during evening rush hour.
+Pro sports events (home games) had a noted impact on usage, especially when the Washington National baseball team is playing. I decided to make my own `sporting_event` variable to combine all four teams for which I had data. However... the spike in demand may just be because games tend to occur during busy periods (noon - 15:59 or after 20:00).
 
 ![Boxplot: Sporting Events](plots/sporting-event-boxplot.png "Boxplot: Sporting Events")
-![Boxplot: Sporting Events during 15:00 - 20:59](plots/sporting-events-evening-rush.png "Boxplot: Sporting Events during 15:00 - 20:59")
+![Boxplot: Boxplot: Sporting Events during comparable hours](plots/sporting-events-comp-hours.png "Boxplot: Sporting Events during comparable hours")
 
 
 - cus_session
