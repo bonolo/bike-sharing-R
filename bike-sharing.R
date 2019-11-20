@@ -286,18 +286,20 @@ logwindspeed.scatter <- ggplot() + geom_point(data = biketrain.df, aes(x = jitte
 
 # Histogram of windspeed speed
 histo <- ggplot(biketrain.df) + geom_histogram(aes(x = windspeed), color = "black",
-                                               fill = "green4",alpha = 0.3, binwidth = 1) +
+                                               fill = "green4", alpha = 0.3, binwidth = 1) +
   labs(x = "windspeed (unknown units)", y = "Frequency", title = "Histogram: windspeed")
 # Place on grid.
-grid.arrange(windspeed.scatter, logwindspeed.scatter, histo, ncol=3)
+grid.arrange(histo, windspeed.bar, windspeed.scatter, logwindspeed.scatter, nrow = 2, ncol=2)
 
 
 # <<<<<<<< CONGRESS IN SESSION... LOWER DEMAND ??? <<<<<<<<<<<<<<<<<<<<<
 ## side-by-side boxplots
 # use par() to split the plots into panels.
 par(mfcol = c(1, 2))
-boxplot(biketrain.df$count ~ biketrain.df$senate, xlab = "senate", ylab = "count")
-boxplot(biketrain.df$count ~ biketrain.df$house, xlab = "house", ylab = "count")
+boxplot(biketrain.df$count ~ biketrain.df$senate, xlab = "senate", ylab = "count", 
+        col = "pink", main = "Senate in session?")
+boxplot(biketrain.df$count ~ biketrain.df$house, xlab = "house", ylab = "count",
+        col = "lightblue", main = "House in session?")
 
 # <<<<<<<< GAME ON? ... INCREASED DEMAND !!!!! <<<<<<0<<<<<<<<<<<<<<<<<<<<<
 ## side-by-side boxplots
@@ -317,12 +319,18 @@ boxplot(sportinghours.train.df$count ~ sportinghours.train.df$sporting_event,
 # <<<<<<<< UNIVERSITIES IN SESSION... LOWER DEMAND ??? <<<<<<<<<<<<<<<<<<<<<
 ## side-by-side boxplots
 par(mfcol = c(2, 3))
-boxplot(biketrain.df$count ~ biketrain.df$cua_session, xlab = "cua_session", ylab = "count")
-boxplot(biketrain.df$count ~ biketrain.df$session_any, xlab = "session_any", ylab = "count")
-boxplot(biketrain.df$count ~ biketrain.df$howard_session, xlab = "howard_session", ylab = "count")
-boxplot(biketrain.df$count ~ biketrain.df$session_count, xlab = "session_count", ylab = "count")
-boxplot(biketrain.df$count ~ biketrain.df$au_session, xlab = "au_session", ylab = "count")
-hist(as.numeric(biketrain.df$session_count), xlab = "session_count", main = "Histogram of session_count")
+boxplot(biketrain.df$count ~ biketrain.df$cua_session, xlab = "cua_session", ylab = "count",
+        col = "cyan", main = "Catholic U of America")
+boxplot(biketrain.df$count ~ biketrain.df$session_any, xlab = "session_any", ylab = "count",
+        col = "grey", main = "Any University")
+boxplot(biketrain.df$count ~ biketrain.df$howard_session, xlab = "howard_session", ylab = "count",
+        col = "magenta", main = "Howard University")
+boxplot(biketrain.df$count ~ biketrain.df$session_count, xlab = "session_count", ylab = "count",
+        col = "brown", main = "# Unis in Session")
+boxplot(biketrain.df$count ~ biketrain.df$au_session, xlab = "au_session", ylab = "count",
+        col = "yellow", main = "American University")
+hist(as.numeric(biketrain.df$session_count), xlab = "session_count", 
+     col = "slateblue", main = "Histogram of session_count") # , breaks = 3)
 
 # <<<<<<<< WEATHER AND SEASON <<<<<<<<<<<<<<<<<<<<<
 ## side-by-side boxplots

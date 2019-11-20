@@ -187,6 +187,7 @@ SELECT DATE_ADD(datetime, INTERVAL 2 HOUR) AS `datetime`
 FROM bike_sharing.sporting_event;
 ;
 
+-- Show hours and counts of sporting events
 SELECT MID(`datetime`, 12, 2) AS start_hour
 , COUNT(*) AS frequency
 FROM bike_sharing.sporting_event

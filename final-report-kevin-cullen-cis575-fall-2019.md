@@ -149,63 +149,64 @@ Variables
 
 The data was clean. The only missing values were the counts in the test data set.
 
-Target variable `count` ranged from 1 to 977
+**Target variable `count`** ranged from 1 to 977
   - median: 145
   - mean: 191
   - distribution: heavily right-tailed; peaks at far left (x = 1 to 5)
 
 ![Histogram of count](plots/count-histogram.png "Histogram of count")
 
-Kaggle provided "datetime", an hourly timestamp. I extracted hour and dayofweek from that because I expected those separate items to be influential.
+Kaggle provided `datetime`, an hourly timestamp. I extracted `hour` and `dayofweek` from that because I expected those to be influential.
 
-There are significant usage peaks at 08:00 and 17:00 (presumably for rush hour).
+There are significant `count` peaks at 08:00 and 17:00 (presumably for rush hour).
 
-Total demand varied little by day of week, but I dug deeper and discovered that timing of demand did vary by day. My scatterplots show weekend usage has two different daily peaks which are broader and less distinct: 23:00 - 00:00 and 10:00 to 15:00 (possibly because people are cycling home from late night events and getting up late the next day).
+Total `count` varied little by day of week. I dug deeper and discovered that timing of `count` did vary by day. My scatterplots show weekend `count` has two different daily peaks which are broader and less distinct: 23:00 - 00:00 and 10:00 to 15:00 (possibly because people are cycling home from late night events and getting up late the next day).
 
-![Demand by hour and dayofweek](plots/demand-by-hour+dayofweek.png "Demand by hour and dayofweek")
+![Count by hour and dayofweek](plots/demand-by-hour+dayofweek.png "Count by hour and dayofweek")
 
 
-I tried several ways to examine the holiday variable. My box plots did the best job of showing little demand difference for holiday vs. non-holiday (though holidays lacked the huge outliers found on other days).
+I tried several ways to examine the `holiday` variable. My box plots did the best job of showing little `count` difference for `holiday` vs. non-holiday (though holidays lacked the huge outliers found on other days).
 
 ![Boxplot: Holiday](plots/holiday-boxplot.png "Boxplot: Holiday")
 
-Weather and season seemed to influence demand. However, spring usage was much lower than all other seasons, which made me wonder if that was when the service launched.
+`weather` and `season` seemed to influence demand. However, spring (1) `count` was much lower than other seasons. Perhaps the service launched that spring.
   
 ![Boxplot: Weather and Season](plots/weather-season-boxplot.png "Boxplot: Weather and Season")
 
-My observations about temperature were
-- Usage is rarely low when the temperature is very high
+My observations about temperature (both `atemp` and `temp`) were
+- `count` is rarely low when the temperature is very high
   - (and rarely high when temperature is very low)
-- Usage increases with temperature until about 35ºF
-- Temperature in DC varies only ~5ºC during the day.
-- The temp and atemp variables only ranged from 0.82 to 41 and 0 to 50 respectively. Presumably, the original data was transformed to eliminate temperatures below 0 Celcius. (Washington DC has plenty of hours/year below freezing.)
+- `count` increases with temperature until about 35ºF
+- temperature in DC varies only ~5ºC during the day.
+- `temp` and `atemp` ranged from 0.82 - 41 and 0 - 50 respectively. Presumably, the original data was transformed to eliminate temperature below 0 Celcius. (Washington DC has plenty of hours/year below freezing.)
 
-I did not analyze humidity, as it seemed redundant. The atemp and weather variables may capture this to a degree.
+I ignored `humidity`, as it seemed redundant. `atemp` and `weather` may capture this to a degree.
 
-![Usage by temperature](plots/usage-by-temp.png "Usage by temperature")
+![Count by temperature](plots/count-by-temp.png "Count by temperature")
+
+ `windspeed` ranged 0 - 56. It was clearly pre-binned into 30 distinct values with a curious gap between 0 & 6.0032. Median `count` was roughly even, regardless of speed.
+
+![Count by wind](plots/count-by-wind.png "Count by wind")
 
 
 
-- windspeed (double) wind speed, though units are not provided
+
+When the `house` and `senate` were in session, usage turned out to be lower. That may correlate with other variables, but I couldn't figure any out.
+
+![House Senate Boxplot](plots/count-congress-boxplots.png "House Senate Boxplot")
 
 
-
-- house
-- senate
-
-Pro sports events (home games) had a noted impact on usage, especially when the Washington National baseball team is playing. I decided to make my own `sporting_event` variable to combine all four teams for which I had data. However... the spike in demand may just be because games tend to occur during busy periods (noon - 15:59 or after 20:00).
+Pro sports events (home games) had a noted impact on `count`, especially when the Washington National baseball team is playing. I decided to make my own `sporting_event` variable to combine all four teams for which I had data. However... the spike in `count` may be because games occur during busy periods (noon - 15:59 or after 20:00).
 
 ![Boxplot: Sporting Events](plots/sporting-event-boxplot.png "Boxplot: Sporting Events")
 ![Boxplot: Boxplot: Sporting Events during comparable hours](plots/sporting-events-comp-hours.png "Boxplot: Sporting Events during comparable hours")
 
 
-- cus_session
-- au_session
-- howard_session
-- session_count
-- session_any
+Universities all tended to be in or out of session at the same time (as seen in the histogram below). So... I created a consolidated `session_any` variable.
 
+Usage was lower across the board when universities were in session. That surprised me.
 
+![University plots](plots/university-boxplots+histo.png "University plots")
 
 
 
