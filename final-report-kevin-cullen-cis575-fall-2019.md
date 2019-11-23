@@ -6,21 +6,21 @@
 
 Relevant output from your analyses should be included in the Appendix and referenced in the body of your report. The due date for the final report is Sunday, December 8.
 
-## Executive summary
+## 1. Executive summary
 
-insert  
-  
-content  
-  
-here  
+insert
 
-## Business problem/opportunity (from proposal)
+content
+
+here
+
+## 2. Business problem/opportunity (from proposal)
 
 I used the Kaggle "Bike Sharing Demand" competition as a basis for my project: <https://www.kaggle.com/c/bike-sharing-demand/overview>. Several versions of the data are on Kaggle. I chose what seemed the earliest & most detailed.
 
 Bike sharing companies must balance availability and demand of their vehicles to ensure (a) customers can borrow a bike when they need it and (b) bikes are repaired and in in good order.
 
-The Kaggle challenge requests the following, where "count" is the number of bicycles rented in a given hour...
+The Kaggle challenge requests the following, where `count` is the number of bicycles rented in a given hour...
 
 **Evaluation statistic:** Root Mean Squared Logarithmic Error (RMSLE)
 
@@ -31,35 +31,34 @@ The Kaggle challenge requests the following, where "count" is the number of bicy
     2011-01-20 01:00:00,0
     2011-01-20 02:00:00,0
 
-## Specific business objective(s) (from proposal)
+## 3. Specific business objective(s) (from proposal)
 
 Predict demand for bicycles, using time (date, time, holiday, weekday, season) and weather data. The various competitions do not make true business cases for the prediction based on ROI, etc. However, common sense dictates that sharing companies would want to use this data to keep costs low by having the lowest number of bicycles needed to meet demand. Predictions could also be used to schedule bicycle service and relocation for slower times. (I have read about gig workers whose job is to move ride share bikes and scooters to more central locations.)
 
+I was troubled by issues with separation of timeframes when making a prediction. In other words, much of this data was weather-related and could not be accurately known beforehand. The `casual` and `registered` variables are also collected as part of `count`, so I didn't see how they could be used as a predictor.
 
-## Process followed for selecting and gathering data
 
-### Kaggle Data
+## 4. Process followed for selecting and gathering data
+
+### 4.a. Kaggle Data
 
 Downloaded CSV files for training and test data from <https://www.kaggle.com/c/bike-sharing-demand/overview>.
 
-I extracted separate fields like "hour (of day)", "dayofweek (1-7)" from the built-in datetime hourly time stamp.
+### 4.b. Additional Data Series I Found and Transformed
 
-### Additional Data Series I Found and Transformed
+Some of this was ugly cut & paste from PDFs or HTML into Excel. I used Pentaho/Vantara PDI to load CSVs into a MySQL database for transformations and joins via SQL.
 
-Some of this was ugly cut & paste from PDFs or HTML into Excel. I used Pentaho/Vandara PDI to load CSVs into a MySQL database for transformations and joins via SQL.
-
-I pulled the following subsets together via SQL SELECT with several OUTER JOINs. I exported train and test CSV files with MySQL's SELECT... INTO OUTFILE syntax.
+I pulled the following subsets together via SQL SELECT with several OUTER JOINs. I exported the data to a CSV file with MySQL's SELECT... INTO OUTFILE syntax and brought into R for further exploration.
 
 Related files...
 
     create+select.sql       transformations and joins
     bike_sharing.kjb        (Pentaho PDI ETL Job)
     kaggle_data.ktr         (Pentaho PDI Transformation file)
-    kaggle_plus_test.csv    unified test data file (kaggle + my additional data)
-    kaggle_plus_train.csv   unified test data file (kaggle + my additional data)
+    kaggle_data_plus.csv    unified data file (test + train, kaggle + my additional data)
 
 
-#### 1. House and Senate "in session" variables [house-senate-in-session.csv]
+#### 4.b.1. House and Senate "in session" variables [house-senate-in-session.csv]
 
 Perhaps DC is busier when the legislators are around. I created CSV files from the official calendars of the 112th Congress. <https://www.congress.gov/past-days-in-session> It took 10 minutes and seemed faster than screen-scraping.
 
@@ -69,7 +68,7 @@ Variables
     House       binary
     Senate      binary
 
-#### 2. University calendars [dc-university-sessions.csv]
+#### 4.b.2. University calendars [dc-university-sessions.csv]
 
 University students are a prime demographic for bike sharing. I wanted to capture days when students were likely in town, but not burdened by exams, etc. I found 2011 calendars for the 3rd, 4th, and 5th-largest universities in the DC area (but not 1st or 2nd). I made a CSV to demark days I considered class to be in session. I included weekends but excluded: Thanksgiving breaks, spring breaks, exam weeks, and summer sessions.
 
@@ -81,7 +80,7 @@ Variables...
     session_count      integer   # of universities in session
     session_any        binary    any universities in session?
 
-#### 3. Pro sports schedules (DC-area home games)
+#### 4.b.3. Pro sports schedules (DC-area home games)
 
 Who drives to a pro sporting event? So, I captured (in CSV files) time windows for professional sporting events held within the geographic footprint of the bike share service. I excluded the Washington Redskins because the play in Landover, Maryland... outside the bike sharing service area.
 
@@ -99,7 +98,7 @@ Formats varied greatly. Once the CSVs were in MySQL, I massaged and joined them 
 
 Using start times from the CSV files + typical game lengths, I used SQL to set the binary flag to TRUE for hours during which games were being held, along with a bit of buffer on either side for travel to and from the games. I excluded away games for all.
 
-##### Washington Capitals (NHL) [capitals-schedule-2011.csv]
+##### 4.b.3.1. Washington Capitals (NHL) [capitals-schedule-2011.csv]
 
 Gathered from: <https://www.nhl.com/capitals/news/capitals-announce-composite-2010-11-television-schedule/c-537574> and <https://www.hockey-reference.com/teams/WSH/2012_games.html>
 
@@ -110,7 +109,7 @@ Variables
     caps_time   (HH:mm:ss)
 
 
-##### Washington Nationals (MLB) [nationals-schedule-2011.csv]
+##### 4.b.3.2. Washington Nationals (MLB) [nationals-schedule-2011.csv]
 
 Gathered from: <https://www.retrosheet.org/schedule/>
 
@@ -120,12 +119,12 @@ Variables
     Nationals_Game          binary
     Nationals_Game_Time     string
 
-I replaced Nationals_Game_Time strings ("D" or "N") with typical game times.
+I replaced `Nationals_Game_Time` strings ("D" or "N") with typical game times.
 - D (Day) ~13:05
 - N (Night) ~19:05
 
 
-##### Washington Wizards (NBA) [washington-wizards-2011-schedule.csv]
+##### 4.b.3.3. Washington Wizards (NBA) [washington-wizards-2011-schedule.csv]
 
 Gathered from: <https://www.basketball-reference.com/teams/WAS/2012_games.html>.
 
@@ -134,7 +133,7 @@ Variables
     start_ET      time (HH:mm:ss)
     Date_iso      iso date
 
-##### DC United (MLS) [dc_united-2011-schedule.csv]
+##### 4.b.3.4. DC United (MLS) [dc_united-2011-schedule.csv]
 
 Gathered from: <https://en.wikipedia.org/wiki/2011_D.C._United_season>
 
@@ -145,9 +144,16 @@ Variables
 
 
 
-## Discussion of preliminary data exploration and findings
+## 5. Discussion of preliminary data exploration and findings
 
 The data was clean. The only missing values were the counts in the test data set.
+
+    > describe(bikeall.df$count)
+    bikeall.df$count
+           n  missing distinct  Info   Mean      Gmd  .05    .10    .25    .50    .75    .90    .95
+       10886   6493    822        1    191.6   193.3  5.0    9.0   42.0  145.0  284.0  452.0  563.8
+
+    lowest :   1   2   3   4   5, highest: 943 948 968 970 977
 
 **Target variable `count`** ranged from 1 to 977
   - median: 145
@@ -158,11 +164,11 @@ The data was clean. The only missing values were the counts in the test data set
 
 Kaggle provided `datetime`, an hourly timestamp. I extracted `hour` and `dayofweek` from that because I expected those to be influential.
 
-There are significant `count` peaks at 08:00 and 17:00 (presumably for rush hour).
+There are significant `count` peaks at 08:00 and 17:00 - 18:00 (presumably for rush hour).
 
-Total `count` varied little by day of week. I dug deeper and discovered that timing of `count` did vary by day. My scatterplots show weekend `count` has two different daily peaks which are broader and less distinct: 23:00 - 00:00 and 10:00 to 15:00 (possibly because people are cycling home from late night events and getting up late the next day).
+Total `count` varied little by day of week. I dug deeper and discovered that timing of `count` did vary by day. My scatterplot and heatmap show weekend `count` has two different daily peaks which are broader and less distinct: 23:00 - 00:00 and 10:00 to 15:00 (possibly because people are cycling home from late night events and getting up late the next day).
 
-![Count by hour and dayofweek](plots/demand-by-hour+dayofweek.png "Count by hour and dayofweek")
+![Count by hour and dayofweek](plots/dayofweek-bar+hour-scatter.png "Count by hour and dayofweek")
 
 
 I tried several ways to examine the `holiday` variable. My box plots did the best job of showing little `count` difference for `holiday` vs. non-holiday (though holidays lacked the huge outliers found on other days).
@@ -170,7 +176,7 @@ I tried several ways to examine the `holiday` variable. My box plots did the bes
 ![Boxplot: Holiday](plots/holiday-boxplot.png "Boxplot: Holiday")
 
 `weather` and `season` seemed to influence demand. However, spring (1) `count` was much lower than other seasons. Perhaps the service launched that spring.
-  
+
 ![Boxplot: Weather and Season](plots/weather-season-boxplot.png "Boxplot: Weather and Season")
 
 My observations about temperature (both `atemp` and `temp`) were
@@ -180,15 +186,19 @@ My observations about temperature (both `atemp` and `temp`) were
 - temperature in DC varies only ~5ºC during the day.
 - `temp` and `atemp` ranged from 0.82 - 41 and 0 - 50 respectively. Presumably, the original data was transformed to eliminate temperature below 0 Celcius. (Washington DC has plenty of hours/year below freezing.)
 
-I ignored `humidity`, as it seemed redundant. `atemp` and `weather` may capture this to a degree.
+![Count by atemp & temp](plots/temp-atemp-scatter-line.png "Count by atemp & temp")
 
-![Count by temperature](plots/count-by-temp.png "Count by temperature")
+`humidity` did not correlate to `atemp` or `atemp - temp`, as I expected. However...
+- `count` drops as `humidity` rises.
+- `count` peaks at humidity < 25, though humidity is rarely that low, and generally only 13:00 - 17:00 (peak usage time).
+- `weather` correlates strongly with `humidity`. As `humidity` rises, `weather` gets worse.
+- `humidity` does not correlate with peaks in usage by hour.
+
+![Humidity plots](plots/humidity-scatters.png "Humidity plots")
 
  `windspeed` ranged 0 - 56. It was clearly pre-binned into 30 distinct values with a curious gap between 0 & 6.0032. Median `count` was roughly even, regardless of speed.
 
-![Count by wind](plots/count-by-wind.png "Count by wind")
-
-
+![Windspeed histo and scatter](plots/windspeed-histo+scatter.png "Windspeed histo and scatter")
 
 
 When the `house` and `senate` were in session, usage turned out to be lower. That may correlate with other variables, but I couldn't figure any out.
@@ -204,26 +214,71 @@ Pro sports events (home games) had a noted impact on `count`, especially when th
 
 Universities all tended to be in or out of session at the same time (as seen in the histogram below). So... I created a consolidated `session_any` variable.
 
-Usage was lower across the board when universities were in session. That surprised me.
+`count` was lower across the board when universities were in session. That surprised me.
 
-![University plots](plots/university-boxplots+histo.png "University plots")
-
-
-
-## Description of data preparation - repairs, replacements, reductions, partitions, derivations, transformations and variable clustering
+![University boxplots](plots/uni-boxplots.png "University boxplots")
+![University boxplots and histo](plots/uni-boxplots+histo.png "University boxplots and histo")
 
 
+## 6. Description of data preparation
+
+Related file:
+
+    create+select.sql
+
+### 6.a. Repairs
+
+- Manipulated various strings in SQL to make dates & times join up against Kaggle's datetime field. (`INSERT INTO... SELECT CONCAT`) (`LEFT OUTER JOIN... ON LEFT()`)
+
+### 6.b. Replacements
+
+- Replaced Nationals_Game_Time strings ("D" or "N") with typical game times so I use with other data.
 
 
-## Description of data modeling/analyses and assessments
+### 6.c. Reductions
+
+I thought about binning the `count` variable, but the object of the competition is to predict `count` accurately. So... using bins seemed like a bad way to get my Root Mean Squared Logarithmic Error (RMSLE) down.
+
+The data from Kaggle appeared to have some previous binning. There were only 30 separate `windspeed` measurements.
+
+`temp` and `atemp` had 50 and 65 distinct values, but their range had been shifted to start with 0. There were no units provided, but DC temperatures get below 0 Centigrade and rarely approach 0 Fahrenheit, so I am not sure what the exact prior transformation was.
+
+`weather` was previously binned by the Kaggle competition. ~16 text descriptions were binned into three numeric values.
+- 1: Clear, Few clouds, Partly cloudy, Partly cloudy
+- 2: Mist + Cloudy, Mist + Broken clouds, Mist + Few clouds, Mist
+- 3: Light Snow, Light Rain + Thunderstorm + Scattered clouds, Light Rain + Scattered clouds
+- 4: Heavy Rain + Ice Pallets + Thunderstorm + Mist, Snow + Fog
+
+### 6.d. Partitions
+
+
+### 6.e. Derivations
+
+- Separate `hour` field from the built-in `datetime` hourly time stamp. (MySQL `HOUR()` function)
+- Separate `dayofweek` field from the built-in `datetime` hourly time stamp. (MySQL `DAYOFWEEK()` function)
+- Used SQL transformations to `SELECT` start times for pro sporting events and then `INSERT` derived records for hours when people would be traveling to, attending, or traveling away from home games of 4 teams. (`INSERT INTO... SELECT`)
+
+### 6.f. Transformations
+
+- Consolidated 4 teams' data into a single, binary `sporting_event` variable. (`LEFT OUTER JOIN` with a `SUBSELECT`)
+- Consolidated 3 binary variables (`cua_session`, `howard_session`, `au_session`) into 1 (`session_any`), as long as any were true, since they were generally true at the same times. These variables represented three universities. (`LEFT OUTER JOIN` with a `SUBSELECT`)
+- During preliminary data exploration, I made log_scale transformations on data (`windspeed`, `temp`) to aid me in visualizing, but I didn't think they would be helpful in models.
+- For plotting, I added a scale_y_sqrt() to several plots because the `count` on the y axis was very positively skewed.
+
+### 6.g. Clustering
+
+I couldn't think of any reasons to cluster the data, given my assumption that regression analysis would provide the best results.
+
+
+## 7. Description of data modeling/analyses and assessments
 
 
 
-## Explanation of model comparisons and model selection
+## 8. Explanation of model comparisons and model selection
 
 
 
-## Conclusions and recommendations (i.e., what did you learn from the analysis; did you meet your stated business objective(s); how can the results of your analysis address the business problem/opportunity; what further analyses, that builds on your work, can be in done in the future)
+## 9. Conclusions and recommendations (i.e., what did you learn from the analysis; did you meet your stated business objective(s); how can the results of your analysis address the business problem/opportunity; what further analyses, that builds on your work, can be in done in the future)
 
 
 
