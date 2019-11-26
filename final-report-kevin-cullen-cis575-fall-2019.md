@@ -60,7 +60,7 @@ Related files...
 
 #### 4.b.1. House and Senate "in session" variables [house-senate-in-session.csv]
 
-Perhaps DC is busier when the legislators are around. I created CSV files from the official calendars of the 112th Congress. <https://www.congress.gov/past-days-in-session> It took 10 minutes and seemed faster than screen-scraping.
+Perhaps DC is busier when the legislators are around. I created CSV files from the official calendars of the 112th Congress (<https://www.congress.gov/past-days-in-session>). It took 10 minutes and seemed faster than screen-scraping.
 
 Variables
 
@@ -171,7 +171,7 @@ Total `count` varied little by day of week. I dug deeper and discovered that tim
 ![Count by hour and dayofweek](plots/dayofweek-bar+hour-scatter.png "Count by hour and dayofweek")
 
 
-I tried several ways to examine the `holiday` variable. My box plots did the best job of showing little `count` difference for `holiday` vs. non-holiday (though holidays lacked the huge outliers found on other days).
+I tried several ways to examine the `holiday` variable, all of which showed little `count` difference for `holiday` vs. non-holiday (though holidays lacked the huge outliers found on other days).
 
 ![Boxplot: Holiday](plots/holiday-boxplot.png "Boxplot: Holiday")
 
@@ -206,7 +206,7 @@ When the `house` and `senate` were in session, usage turned out to be lower. Tha
 ![House Senate Boxplot](plots/count-congress-boxplots.png "House Senate Boxplot")
 
 
-Pro sports events (home games) had a noted impact on `count`, especially when the Washington National baseball team is playing. I decided to make my own `sporting_event` variable to combine all four teams for which I had data. However... the spike in `count` may be because games occur during busy periods (noon - 15:59 or after 20:00).
+Pro sports events (home games) had a noted impact on `count`, especially when the Washington National baseball team is playing. I decided to make my own `sporting_event` variable to combine all four teams for which I had data. However... the spike in `count` may be because games occur during busy periods (noon - 15:59 or after 17:59).
 
 ![Boxplot: Sporting Events](plots/sporting-event-boxplot.png "Boxplot: Sporting Events")
 ![Boxplot: Boxplot: Sporting Events during comparable hours](plots/sporting-events-comp-hours.png "Boxplot: Sporting Events during comparable hours")
@@ -251,6 +251,9 @@ The data from Kaggle appeared to have some previous binning. There were only 30 
 
 ### 6.d. Partitions
 
+I started by adding an id column to aid in sampling/partitioning and accuracy testing: `bikeall.df$id <- seq.int(nrow(bikeall.df))`
+
+Because this Kaggle data set has no validation values in the testing data file, I created random training and validation data sets from the Kaggle train.csv file.
 
 ### 6.e. Derivations
 
@@ -263,7 +266,7 @@ The data from Kaggle appeared to have some previous binning. There were only 30 
 - Consolidated 4 teams' data into a single, binary `sporting_event` variable. (`LEFT OUTER JOIN` with a `SUBSELECT`)
 - Consolidated 3 binary variables (`cua_session`, `howard_session`, `au_session`) into 1 (`session_any`), as long as any were true, since they were generally true at the same times. These variables represented three universities. (`LEFT OUTER JOIN` with a `SUBSELECT`)
 - During preliminary data exploration, I made log_scale transformations on data (`windspeed`, `temp`) to aid me in visualizing, but I didn't think they would be helpful in models.
-- For plotting, I added a scale_y_sqrt() to several plots because the `count` on the y axis was very positively skewed.
+- While plotting, I noticed scale_y_sqrt() made correlations more obvious because `count` on the y axis was very positively skewed. I added a count_sqrt variable to the MySQL export just in case.
 
 ### 6.g. Clustering
 

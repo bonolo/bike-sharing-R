@@ -7,6 +7,7 @@ require(gridExtra)
 library(pastecs)
 library(reshape2)
 library(forecast)
+# library(Metrics)
 
 options(scipen = 100, digits = 6)
 
@@ -24,6 +25,8 @@ options(scipen = 100, digits = 6)
 # 17379 total
 
 bikeall.df <- read.csv("csv-inputs/kaggle_data_plus.csv", na.strings = "\\N", header = TRUE)
+# create id column
+bikeall.df$id <- seq.int(nrow(bikeall.df))
 
 # Convert a few things to factors
 # bikeall.df[,'hour']<-factor(bikeall.df[,'hour'])
@@ -71,15 +74,51 @@ describe(as.factor(bikeall.df$humidity))
 glimpse(bikeall.df)
 
 
-# Regression model. Not working as of 2019-11-10
-# reg <- lm(count ~., data = bikeall.df, subset = train.rows)
-# tr.res <- data.frame(biketrain.df$count, reg$fitted.values, reg$residuals)
-# head(tr.res)
-# 
-# ####  From textbook: Table 2.11
-# reg <- lm(TOTAL_VALUE ~ .-TAX, data = housing.df, subset = train.rows) # remove variable "TAX"
-# tr.res <- data.frame(train.data$TOTAL_VALUE, reg$fitted.values, reg$residuals)
-# head(tr.res)
+# --------- Table 5.1 : Textbook ----------------------------
+
+
+
+# --- Regression test. All defaults from textbook. RMSLE 1.31020
+# randomly generate training and validation sets
+training <- sample(biketrain.df$id, floor(length(biketrain.df$id) * .6))  # 60% into training
+validation <- setdiff(biketrain.df$id, training) # the rest into validation
+
+regtrain.df <- subset(biketrain.df, 
+                      select = c(count, hour, dayofweek, season, workingday, # weather, 
+                                 temp, windspeed, house, senate, session_any)) 
+
+# run linear regression model
+reg <- lm(count~., data = regtrain.df, subset = training,
+          na.action=na.exclude)
+pred_t <- predict(reg, na.action = na.pass)
+pred_v <- predict(reg, newdata = regtrain.df[validation,],
+                  na.action = na.pass)
+
+## evaluate performance
+# training
+accuracy(pred_t, biketrain.df[training,]$count)
+# validation
+accuracy(pred_v, biketrain.df[validation,]$count)
+
+## against the test data.
+pred_test <- predict(reg, newdata = biketest.df,
+                     na.action = na.pass)
+# convert negative values to 0
+pred_test[pred_test < 0] <- 0
+
+# write submission in kaggle format
+# datetime,count
+# 2011-01-20 00:00:00,0
+write.csv(data.frame(datetime = biketest.df$datetime,
+                     count = pred_test),
+          file = "output/regression-test-10-vars.csv",
+          row.names=FALSE)
+
+
+
+
+
+
 
 # -------------- Plots -----------------------------------
 
@@ -95,12 +134,15 @@ ggplot() + geom_histogram(data = biketrain.df, aes(x = count), color = "black",
 
 
 
+
+
+
 # hour & dayofweek ----------------------------------
 
 # Bar chart : count by dayofweek ---------
 days.of.week <- c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
-by.dayofweek <- group_by(biketrain.df, dayofweek)
-dayofweek.bar.data <- summarise(by.dayofweek, mean_count = mean(count), median_count = median(count))
+dayofweek.bar.data <- group_by(biketrain.df, dayofweek)
+dayofweek.bar.data <- summarise(dayofweek.bar.data, mean_count = mean(count), median_count = median(count))
 
 dayofweek.bar.data <- melt(dayofweek.bar.data, id.vars = 'dayofweek')
 dayofweek.bar <- ggplot() + 
@@ -119,10 +161,10 @@ names(median.hourly.count) <- c("hour", "mediancount")
 
 
 # Tile plot : Count: hour x day -------------------
-by.hour <- group_by(biketrain.df, hour, dayofweek)
-tile.data <- summarise(by.hour, mean_count = mean(count))
+hour.tile.data <- group_by(biketrain.df, hour, dayofweek)
+hour.tile.data <- summarise(hour.tile.data, mean_count = mean(count))
 
-hour.day.tile <- ggplot(tile.data, aes(hour, dayofweek)) +
+hour.day.tile <- ggplot(hour.tile.data, aes(hour, dayofweek)) +
   geom_tile(aes(fill = mean_count)) +
   scale_fill_gradient(low = "white", high = "black") +
   scale_y_discrete(labels = days.of.week, breaks = c(7, 6, 5, 4, 3, 2, 1)) +
@@ -159,8 +201,8 @@ hour.scatter2 <- ggplot() +
   labs(title = "Count by Hour (color: workingday) w/ median trendline", 
        x = "Hour of Day (00-23)", y = "Count", color = "workingday") +
   # line plot : median.hourly.count
-  geom_line(data = median.hourly.count, aes(x = hour, y = mediancount), size = 1, color = "grey25") +
-  geom_smooth(data = median.hourly.count, aes(x = hour, y = mediancount), formula = y ~ x, method = "lm", color = "navy", se = FALSE, na.rm = TRUE)
+  geom_line(data = median.hourly.count, aes(x = hour, y = mediancount), size = 1, color = "grey25") # +
+  # geom_smooth(data = median.hourly.count, aes(x = hour, y = mediancount), method = "auto")
 
 
 # Place on grid.
@@ -197,12 +239,18 @@ names(median.atemp.count) <- c("atemp", "mediancount")
 
 # Scatter Plots: Count by Temperature with median usage trendline
 # atemp
-atemp.scatter <- ggplot() + geom_point(data = biketrain.df, aes(x = jitter(biketrain.df$atemp, 2), y = count),
-                                  pch = 16, colour = "orange", alpha = 0.3) +
-  labs(x = "atemp", y = "Count", title = "Count by 'Feels Like Temp' (ºC) - w/ median trendline") + 
+atemp.scatter <- ggplot() + 
+  geom_point(data = biketrain.df, 
+             aes(x = jitter(biketrain.df$atemp, 2), y = count),
+             pch = 16, colour = "orange", alpha = 0.3) +
   scale_y_sqrt() +
-  geom_line(data = median.atemp.count, aes(x = atemp, y = mediancount), size = 1, color = "grey28") +
-  geom_smooth(data = median.atemp.count, aes(x = atemp, y = mediancount), formula = y ~ poly(x, 2), method = "lm", color = "navy", se = FALSE, na.rm = TRUE)
+  # geom_line(data = median.atemp.count, aes(x = atemp, y = mediancount), size = 1, color = "grey28") +
+  geom_smooth(data = median.atemp.count, 
+              aes(x = atemp, y = mediancount, color = mediancount), 
+              method = "auto") +
+  # se = FALSE, na.rm = TRUE, formula = y ~ poly(x, 2), method = "lm", 
+  labs(x = "atemp", y = "count", title = "count by atemp 'feels like' ºC - w/ median trendline")
+atemp.scatter
 
 # temp
 temp.scatter <- ggplot() + geom_point(data = biketrain.df, aes(x = jitter(biketrain.df$temp, 2), y = count),
@@ -210,8 +258,8 @@ temp.scatter <- ggplot() + geom_point(data = biketrain.df, aes(x = jitter(biketr
   labs(x = "temp", y = "Count", title = "Count by temp (ºC) - w/ median trendline") + 
   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) +
   scale_y_sqrt() +
-  geom_line(data = median.temp.count, aes(x = temp, y = mediancount), size = 1, color = "grey28") +
-  geom_smooth(data = median.temp.count, aes(x = temp, y = mediancount), formula = y ~ poly(x, 2), method = "lm", color = "navy", se = FALSE, na.rm = TRUE)
+  # geom_line(data = median.temp.count, aes(x = temp, y = mediancount), size = 1, color = "grey28") +
+  geom_smooth(data = median.temp.count, aes(x = temp, y = mediancount))
   
 # Median temp by hour of day: Line Plot
 data.for.plot <- aggregate(biketrain.df$temp, by = list(biketrain.df$hour), FUN = median)
@@ -219,10 +267,6 @@ names(data.for.plot) <- c("hour", "mediantemp")
 temp.line <- ggplot() + geom_line(data = data.for.plot, aes(x = hour, y = mediantemp),
                                   stat = "identity") + ylim(0, 41)
   labs(title = "temp varies little through day (~ 5ºC)", y = "median temp", x = "Hour of Day (00-23)")
-
-
-geom_smooth(formula = y ~ poly(x, 2), method= "lm",
-            colour = "navy", se = FALSE, na.rm = TRUE)
 
 
 # Place on grid.
@@ -255,8 +299,8 @@ humidity.weather.scatter <- ggplot() +
   labs(title = "Count by Humidity (color: weather) w/ median trendline", 
        x = "Humidity", y = "Count", color = "weather") +
   # line plot : median.humidity.count
-  geom_line(data = median.humidity.count, aes(x = humidity, y = mediancount), size = 1, color = "grey28") +
-  geom_smooth(data = median.humidity.count, aes(x = humidity, y = mediancount), formula = y ~ poly(x, 2), method = "lm", color = "navy", se = FALSE, na.rm = TRUE)
+  # geom_line(data = median.humidity.count, aes(x = humidity, y = mediancount), size = 1, color = "grey28") +
+  geom_smooth(data = median.humidity.count, aes(x = humidity, y = mediancount), color = "grey28")
 humidity.weather.scatter
 
 
@@ -286,7 +330,7 @@ humidity.by.hour
 grid.arrange(humidity.weather.scatter, humidity.by.hour, ncol = 2)
 
 
-# Count : Holiday vs. Not : JITTERy Scatter Plot
+# Count : Holiday vs. Not
 # -------  HOLIDAY USE BOX PLOT --------------
 # As a boxplot
 ggplot(biketrain.df) + geom_boxplot(aes(x = holiday, y = count), 
@@ -325,8 +369,8 @@ windspeed.scatter <- ggplot() +
   scale_y_sqrt() +
   # scale_color_manual(values=weather.colors) + 
   labs(x = "Wind Speed (units not provided)", y = "Count", title = "Count by Wind Speed - with median count trendline") +
-  geom_line(data = median.windspeed.count, aes(x = windspeed, y = mediancount), size = 1, color = "grey28") +
-  geom_smooth(data = median.windspeed.count, aes(x = windspeed, y = mediancount), formula = y ~ poly(x, 2), method = "lm", color = "navy", se = FALSE, na.rm = TRUE)
+  # geom_line(data = median.windspeed.count, aes(x = windspeed, y = mediancount), size = 1, color = "grey28") +
+  geom_smooth(data = median.windspeed.count, aes(x = windspeed, y = mediancount))
   
 
 # Histogram of windspeed speed
@@ -336,6 +380,7 @@ histo <- ggplot(biketrain.df) + geom_histogram(aes(x = windspeed), color = "blac
 
 # Place on grid.
 grid.arrange(histo, windspeed.scatter, ncol=2)
+rm(histo)
 
 
 # ---- CONGRESS IN SESSION... LOWER DEMAND ??? -------------
@@ -369,7 +414,12 @@ boxplot(wknd.sportinghours.train.df$count ~ wknd.sportinghours.train.df$sporting
         col = "darkred", main = "sporting_event: comparable times", sub = "(noon - 15:59 or after 17:59)")
 
 
-# --------- UNIVERSITIES IN SESSION... LOWER DEMAND ??? <<<<<<<<<<<<<<<<<<<<<
+
+
+
+
+
+# --------- UNIVERSITIES IN SESSION... LOWER DEMAND ??? --------- 
 ## side-by-side boxplots
 par(mfcol = c(1, 3))
 boxplot(biketrain.df$count ~ biketrain.df$cua_session, xlab = "cua_session", ylab = "count",
@@ -382,14 +432,35 @@ boxplot(biketrain.df$count ~ biketrain.df$howard_session, xlab = "howard_session
 par(mfcol = c(1, 3))
 boxplot(biketrain.df$count ~ biketrain.df$session_count, xlab = "session_count", ylab = "count",
         col = "brown", main = "# Unis in Session")
+
 boxplot(biketrain.df$count ~ biketrain.df$session_any, xlab = "session_any", ylab = "count",
-        col = "grey", main = "Any University")
+        col = "dodgerblue3", main = "Any Uni in Session")
+
+# boxplot(biketrain.df$count ~ biketrain.df$session_any, xlab = "session_any", ylab = "count",
+#         col = "grey", main = "Any University")
 hist(as.numeric(biketrain.df$session_count), xlab = "session_count", 
      col = "slateblue", main = "Histogram of session_count") # , breaks = 3)
 
 par(mfcol = c(1, 1))
 
-# --------- WEATHER AND SEASON <<<<<<<<<<<<<<<<<<<<<
+
+seasons <- c("Spring", "Summer", "Fall", "Winter")
+
+session_any.box.data <- biketrain.df[c('season', 'session_any', 'count')]
+# session_any.box.data <- group_by(session_any.box.data, season)
+# session_any.box.data <- melt(session_any.box.data, id.vars = 'season')
+
+session_any.box <- ggplot(session_any.box.data, aes(x = season, y = count, fill = session_any)) + 
+  geom_boxplot() +
+  scale_x_discrete(labels = seasons) +
+  theme(legend.position = "top") +
+  theme_minimal() +
+  labs(title = "session_any is not a proxy for season")
+
+
+
+
+# --------- WEATHER AND SEASON --------- 
 ## side-by-side boxplots
 # par(mfcol = c(1, 2))
 # boxplot(biketrain.df$count ~ biketrain.df$weather, xlab = "weather", ylab = "count", main = "count by weather",
@@ -407,3 +478,5 @@ season.box <- ggplot(biketrain.df) +
 
 # Place on grid.
 grid.arrange(weather.box, season.box, ncol=2)
+rm(season.box)
+rm(weather.box)

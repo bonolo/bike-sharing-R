@@ -212,8 +212,8 @@ ORDER BY start_hour;
  * a binary "training" field.
  */
  -- Get a row of headers so we can put them in CSV export
-SELECT 'train', 'datetime', 'hour', 'dayofweek', 'season', 'holiday', 'workingday', 'weather', 'temp', 'atemp'
-, 'humidity', 'windspeed', 'casual', 'registered', 'count', 'house', 'senate', 'capitals', 'nationals'
+SELECT 'train', 'datetime', 'hour', 'dayofweek', 'season', 'holiday', 'workingday', 'weather', 'temp', 'temp_squared', 'atemp'
+, 'humidity', 'windspeed', 'casual', 'registered', 'count', 'count_sqrt', 'house', 'senate', 'capitals', 'nationals'
 , 'united', 'wizards', 'sporting_event', 'cua_session', 'au_session', 'howard_session', 'session_count', 'session_any'
 
 -- UNION the header row with the data
@@ -228,12 +228,14 @@ SELECT IF(DAYOFMONTH(kaggle_data.`datetime`) < 20, 1, 0) AS train
 , kaggle_data.workingday
 , kaggle_data.weather
 , kaggle_data.temp
+ , POW(kaggle_data.temp, 2) AS temp_squared
 , kaggle_data.atemp
 , kaggle_data.humidity
 , kaggle_data.windspeed
 , kaggle_data.casual
 , kaggle_data.registered
 , kaggle_data.`count`
+, SQRT(kaggle_data.`count`) AS count_sqrt
 , IFNULL(house_senate.house, 0) AS house
 , IFNULL(house_senate.senate, 0) AS senate
 , IFNULL(sp_event.capitals, 0) AS capitals
@@ -272,4 +274,13 @@ INTO OUTFILE '/Users/kcullen/Projects/cis575/bike-sharing/csv-inputs/kaggle_data
 FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"'
   LINES TERMINATED BY '\n'
 ;
+
+select dayofweek(datetime) AS dayofweek
+, avg(count) AS mean_count
+from kaggle_data
+group by dayofweek
+ORDER BY dayofweek ASC;
+
+Error Code: 1146. Table 'cis575.bike_sharing' doesn't exist
+
 
