@@ -47,11 +47,21 @@ bikeall.df[,'au_session']<-factor(bikeall.df[,'au_session'])
 bikeall.df[,'howard_session']<-factor(bikeall.df[,'howard_session'])
 bikeall.df[,'session_any']<-factor(bikeall.df[,'session_any'])
 
-biketrain.df <- subset(bikeall.df, train == 1)
+# Dataframe to build predictions for contest submission
 biketest.df <- subset(bikeall.df, train == 0)
 
-train.rows   <- rownames(biketrain.df)
-test.rows    <- rownames(biketest.df)
+# All the vars for plotting. Using train == 1 because we need `count`
+bikeplot.df <- subset(bikeall.df, train == 1)
+
+# Keep only variables we would use for predictions.
+# Skipping stuff like casual/registered counts, individual sporting events/calendars.
+# Put these in a data frames used to build models.
+keeps <- c("id", "count", "hour", "dayofweek", "season", "holiday", "workingday", 
+           "weather", "temp", "temp_squared", "atemp", "humidity", 
+           "windspeed", "house", "senate", "sporting_event", "session_any")
+biketrain.df <- bikeplot.df[keeps]
+
+
 
 # -------------- Data shape & summary ----------------------------
 dim(bikeall.df)
@@ -74,50 +84,184 @@ describe(as.factor(bikeall.df$humidity))
 glimpse(bikeall.df)
 
 
-# --------- Table 5.1 : Textbook ----------------------------
+# --------- Models ----------------------------
 
 
-
-# --- Regression test. All defaults from textbook. RMSLE 1.31020
 # randomly generate training and validation sets
-training <- sample(biketrain.df$id, floor(length(biketrain.df$id) * .6))  # 60% into training
-validation <- setdiff(biketrain.df$id, training) # the rest into validation
+set.seed(7)  # set seed for reproducing the partition
 
-regtrain.df <- subset(biketrain.df, 
-                      select = c(count, hour, dayofweek, season, workingday, # weather, 
-                                 temp, windspeed, house, senate, session_any)) 
+ss <- sample(1:2, size = nrow(biketrain.df), replace = TRUE, prob = c(0.6, 0.4))
+training.df = biketrain.df[ss==1,]
+validation.df = biketrain.df[ss==2,]
 
-# run linear regression model
-reg <- lm(count~., data = regtrain.df, subset = training,
-          na.action=na.exclude)
-pred_t <- predict(reg, na.action = na.pass)
-pred_v <- predict(reg, newdata = regtrain.df[validation,],
-                  na.action = na.pass)
+# --- "Multiple linear regression". Adapted from textbook. My best-guess 10 variables. ----------
+# RMSLE 1.31020 w/out humidity. ME 1.26723 RMSE 141.212
+# RMSLE 1.28159 with humidity. ME 0.93598 RMSE 137.619
+# LOTS of negative predictions to remove.
 
-## evaluate performance
-# training
-accuracy(pred_t, biketrain.df[training,]$count)
-# validation
-accuracy(pred_v, biketrain.df[validation,]$count)
+vars_to_use <- c('count', 'hour', 'dayofweek', 'season', 'workingday', 'humidity', # weather, 
+                 'temp', 'windspeed', 'house', 'senate', 'session_any')
 
-## against the test data.
-pred_test <- predict(reg, newdata = biketest.df,
-                     na.action = na.pass)
+mlr_train.df <- subset(training.df,
+                   select = vars_to_use)
+mlr_valid.df <- subset(validation.df,
+                       select = vars_to_use)
+
+bike.lm <- lm(count ~ ., data = mlr_train.df, na.action = na.exclude)
+# training: ME -0.0000000000135085 RMSE 137.355
+pred_t <- predict(bike.lm, na.action = na.pass)
+accuracy(pred_t, mlr_train.df$count)
+
+# validation ME 0.93598 RMSE 137.619
+pred_v <- predict(bike.lm, newdata = validation.df, na.action = na.pass)
+accuracy(pred_v, validation.df$count)
+
+#  use options() to ensure numbers are not displayed in scientific notation.
+# options(scipen = 999)
+summary(bike.lm)
+
+
+
+
+# -- linear regression with stepwise variable selection ----------------------------
+# RMSLE 1.64349. Bummer. ME 1.607 RMSE 136.839
+
+#### Table 6.6
+# use step() to run stepwise regression.
+# set directions = to either "backward", "forward", or "both"
+bike.lm <- lm(count ~ ., data = training.df, na.action = na.exclude)
+bike.step.lm <- step(bike.lm, direction = "both")
+summary(bike.step.lm)
+
+# Wow... 3 of my derived variables and 2 of my added/created variables !!!
+# Call: lm(formula = count ~ id + hour + dayofweek + season + weather + 
+     # temp_squared + atemp + humidity + windspeed + house + session_any, 
+   # data = training.df, na.action = na.exclude)
+
+bike.step.lm.pred <- predict(bike.step.lm, training.df)
+# validation...  ME 1.607 RMSE 136.839
+accuracy(bike.step.lm.pred, validation.df$count) 
+
+
+residuals <- bike.step.lm.pred - validation.df$count
+hist(residuals, breaks = 50, xlab = "residual (predicted - actual)")
+
+
+
+
+
+
+
+# +++ How do I do a regression tree?  --------------------
+# http://uc-r.github.io/regression_trees
+
+# performing regression trees
+library(rpart)
+library(rpart.plot)
+
+m1 <- rpart(
+  formula = count ~ .,
+  data = training.df,
+  method = "anova"
+)
+
+rpart.plot(m1)
+plotcp(m1) # Maximum size/depth of tree = 17, or so it seems.
+
+m2 <- rpart(
+  formula = count ~ .,
+  data = training.df,
+  method = "anova",
+  control = list(cp = 0, xval = 10)
+)
+
+plotcp(m2) # Maximum size/depth looks way higher here.
+abline(v = 17, lty = "dashed")
+abline(v = 30, lty = "dashed")
+
+# perform a grid search
+hyper_grid <- expand.grid(
+  minsplit = seq(5, 20, 1),
+  maxdepth = seq(20, 30, 1)
+)
+
+# iterate through each minsplit and maxdepth combination.
+# save each model into its own list item.
+models <- list()
+
+for (i in 1:nrow(hyper_grid)) {
+  # get minsplit, maxdepth values at row i
+  minsplit <- hyper_grid$minsplit[i]
+  maxdepth <- hyper_grid$maxdepth[i]
+  
+  # train a model and store in the list
+  models[[i]] <- rpart(
+    formula = count ~ .,
+    data = training.df,
+    method = "anova",
+    control = list(minsplit = minsplit, maxdepth = maxdepth)
+  )
+}
+
+# function to get optimal cp
+get_cp <- function(x) {
+  min <- which.min(x$cptable[, "xerror"])
+  cp <- x$cptable[min, "CP"] 
+}
+
+# function to get minimum error
+get_min_error <- function(x) {
+  min <- which.min(x$cptable[, "xerror"])
+  xerror <- x$cptable[min, "xerror"] 
+}
+
+hyper_grid %>%
+  mutate(
+    cp    = purrr::map_dbl(models, get_cp),
+    error = purrr::map_dbl(models, get_min_error)
+  ) %>%
+  arrange(error) %>%
+  top_n(-5, wt = error)
+
+
+# -- Create Optimal tree -------------
+# RMSLE of submitted data: 1.02692. ME: -2.11708 RMSE: 92.3636
+optimal_tree <- rpart(
+  formula = count ~ .,
+  data = training.df,
+  method = "anova",
+  control = list(minsplit = 19, maxdepth = 30, cp = 0.01)
+)
+
+pred <- predict(optimal_tree, newdata = validation.df)
+accuracy(pred, validation.df$count)
+
+
+
+
+# -- Predict from competition data. Remove negatives and write to CSV ------------------------------------
+
+## Predictions with test/competition data.
+pred_test <- predict(optimal_tree, newdata = biketest.df, na.action = na.pass)
+
 # convert negative values to 0
 pred_test[pred_test < 0] <- 0
 
 # write submission in kaggle format
 # datetime,count
 # 2011-01-20 00:00:00,0
-write.csv(data.frame(datetime = biketest.df$datetime,
-                     count = pred_test),
-          file = "output/regression-test-10-vars.csv",
-          row.names=FALSE)
+write.csv(data.frame(datetime = biketest.df$datetime, count = pred_test),
+          file = "output/regression_tree_optimal.csv", row.names=FALSE)
+
+
+
+# -- Bagging ???? --------------------------------------
+# http://uc-r.github.io/regression_trees#bag
 
 
 
 
-
+# +++ See Chapter 13 for further details on bagging. --------------------
 
 
 # -------------- Plots -----------------------------------
@@ -125,12 +269,12 @@ write.csv(data.frame(datetime = biketest.df$datetime,
 
 
 # Leadoff Graphic: Histogram of count ----------------------
-ggplot() + geom_histogram(data = biketrain.df, aes(x = count), color = "black",
+ggplot() + geom_histogram(data = bikeplot.df, aes(x = count), color = "black",
                                       fill = "olivedrab",alpha = 0.3, binwidth = 25) +
   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
   labs(x = "count (hourly usage count)", y = "Frequency", title = "Histogram of hourly count (usage)") +
-  geom_vline(aes(xintercept = median(biketrain.df$count), colour = "median")) + 
-  geom_vline(aes(xintercept = mean(biketrain.df$count), colour = "mean"))
+  geom_vline(aes(xintercept = median(bikeplot.df$count), colour = "median")) + 
+  geom_vline(aes(xintercept = mean(bikeplot.df$count), colour = "mean"))
 
 
 
@@ -141,7 +285,7 @@ ggplot() + geom_histogram(data = biketrain.df, aes(x = count), color = "black",
 
 # Bar chart : count by dayofweek ---------
 days.of.week <- c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
-dayofweek.bar.data <- group_by(biketrain.df, dayofweek)
+dayofweek.bar.data <- group_by(bikeplot.df, dayofweek)
 dayofweek.bar.data <- summarise(dayofweek.bar.data, mean_count = mean(count), median_count = median(count))
 
 dayofweek.bar.data <- melt(dayofweek.bar.data, id.vars = 'dayofweek')
@@ -156,12 +300,12 @@ dayofweek.bar
 
 
 # hour trend line data 
-median.hourly.count <- aggregate(biketrain.df$count, by = list(biketrain.df$hour), FUN = median)
+median.hourly.count <- aggregate(bikeplot.df$count, by = list(bikeplot.df$hour), FUN = median)
 names(median.hourly.count) <- c("hour", "mediancount")
 
 
 # Tile plot : Count: hour x day -------------------
-hour.tile.data <- group_by(biketrain.df, hour, dayofweek)
+hour.tile.data <- group_by(bikeplot.df, hour, dayofweek)
 hour.tile.data <- summarise(hour.tile.data, mean_count = mean(count))
 
 hour.day.tile <- ggplot(hour.tile.data, aes(hour, dayofweek)) +
@@ -179,7 +323,7 @@ hour.day.tile
 # 
 # hour.scatter1 <- ggplot() +
 #   # scatter plot
-#   geom_point(data = biketrain.df, aes(x = jitter(hour, 2), y = count, colour = biketrain.df$dayofweek), 
+#   geom_point(data = bikeplot.df, aes(x = jitter(hour, 2), y = count, colour = bikeplot.df$dayofweek), 
 #              pch = 20, alpha = 0.5) +
 #   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
 #   scale_color_manual(values=dayofweek.colors) + 
@@ -194,7 +338,7 @@ hour.day.tile
 workingday.colors <- c("blue3", "darkorange2") # color per workday/not
 hour.scatter2 <- ggplot() +
   # scatter plot
-  geom_point(data = biketrain.df, aes(x = jitter(hour, 2), y = count, colour = biketrain.df$workingday), 
+  geom_point(data = bikeplot.df, aes(x = jitter(hour, 2), y = count, colour = bikeplot.df$workingday), 
              pch = 16, alpha = 0.3) + 
   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
   scale_color_manual(values=workingday.colors) + 
@@ -214,7 +358,7 @@ grid.arrange(dayofweek.bar, hour.day.tile, hour.scatter2, ncol = 3) # , widths =
 # dayofweek --------------------------- 
 # JITTERy Scatter Plot: count by dayofweek (Holidays in red) 
 holiday.colors <- c("0" = "blue", "1" = "red")
-ggplot(biketrain.df) + geom_point(aes(x = jitter(as.numeric(dayofweek), 2), y = count, colour = biketrain.df$holiday), 
+ggplot(bikeplot.df) + geom_point(aes(x = jitter(as.numeric(dayofweek), 2), y = count, colour = bikeplot.df$holiday), 
                                   pch = 16, alpha = 0.3) +
   scale_color_manual(values = holiday.colors) +
   labs(title = "Count by Day of Week (with Holidays in red)", 
@@ -232,16 +376,16 @@ ggplot(biketrain.df) + geom_point(aes(x = jitter(as.numeric(dayofweek), 2), y = 
 # - atemp: (double) "feels like" in Celsius
 
 # make trend line data first
-median.temp.count <- aggregate(biketrain.df$count, by = list(biketrain.df$temp), FUN = median)
-median.atemp.count <- aggregate(biketrain.df$count, by = list(biketrain.df$atemp), FUN = median)
+median.temp.count <- aggregate(bikeplot.df$count, by = list(bikeplot.df$temp), FUN = median)
+median.atemp.count <- aggregate(bikeplot.df$count, by = list(bikeplot.df$atemp), FUN = median)
 names(median.temp.count) <- c("temp", "mediancount")
 names(median.atemp.count) <- c("atemp", "mediancount")
 
 # Scatter Plots: Count by Temperature with median usage trendline
 # atemp
 atemp.scatter <- ggplot() + 
-  geom_point(data = biketrain.df, 
-             aes(x = jitter(biketrain.df$atemp, 2), y = count),
+  geom_point(data = bikeplot.df, 
+             aes(x = jitter(bikeplot.df$atemp, 2), y = count),
              pch = 16, colour = "orange", alpha = 0.3) +
   scale_y_sqrt() +
   # geom_line(data = median.atemp.count, aes(x = atemp, y = mediancount), size = 1, color = "grey28") +
@@ -253,7 +397,7 @@ atemp.scatter <- ggplot() +
 atemp.scatter
 
 # temp
-temp.scatter <- ggplot() + geom_point(data = biketrain.df, aes(x = jitter(biketrain.df$temp, 2), y = count),
+temp.scatter <- ggplot() + geom_point(data = bikeplot.df, aes(x = jitter(bikeplot.df$temp, 2), y = count),
                                   pch = 16, colour = "salmon", alpha = 0.3) +
   labs(x = "temp", y = "Count", title = "Count by temp (ºC) - w/ median trendline") + 
   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) +
@@ -262,7 +406,7 @@ temp.scatter <- ggplot() + geom_point(data = biketrain.df, aes(x = jitter(biketr
   geom_smooth(data = median.temp.count, aes(x = temp, y = mediancount))
   
 # Median temp by hour of day: Line Plot
-data.for.plot <- aggregate(biketrain.df$temp, by = list(biketrain.df$hour), FUN = median)
+data.for.plot <- aggregate(bikeplot.df$temp, by = list(bikeplot.df$hour), FUN = median)
 names(data.for.plot) <- c("hour", "mediantemp")
 temp.line <- ggplot() + geom_line(data = data.for.plot, aes(x = hour, y = mediantemp),
                                   stat = "identity") + ylim(0, 41)
@@ -278,7 +422,7 @@ grid.arrange(atemp.scatter, temp.scatter, temp.line, ncol = 3)
 
 
 # make trend line data first
-median.humidity.count <- aggregate(biketrain.df$count, by = list(biketrain.df$humidity), FUN = median)
+median.humidity.count <- aggregate(bikeplot.df$count, by = list(bikeplot.df$humidity), FUN = median)
 names(median.humidity.count) <- c("humidity", "mediancount")
 
 # - weather: (categorical)
@@ -291,7 +435,7 @@ weather.colors <- c("blue", "orange", "red", "black") # color per level of weath
 
 humidity.weather.scatter <- ggplot() +
   # scatter plot
-  geom_point(data = biketrain.df, aes(x = jitter(humidity, 2), y = count, colour = biketrain.df$weather), 
+  geom_point(data = bikeplot.df, aes(x = jitter(humidity, 2), y = count, colour = bikeplot.df$weather), 
              pch = 16, alpha = 0.3) +
   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
   scale_y_sqrt() +
@@ -305,13 +449,13 @@ humidity.weather.scatter
 
 
 # Humidity by hour Scatterplot w/ median trendline
-data.for.plot <- aggregate(biketrain.df$humidity, by = list(biketrain.df$hour), FUN = median)
+data.for.plot <- aggregate(bikeplot.df$humidity, by = list(bikeplot.df$hour), FUN = median)
 names(data.for.plot) <- c("hour", "medianhumidity")
 humidity.by.hour <- ggplot() + 
   # geom_bar(data = median.hourly.count, aes(x = hour, y = mediancount / 5),
   #          colour = "grey", fill = "grey", alpha = 0.2, 
   #          stat = "identity") +
-  geom_point(data = biketrain.df, aes(x = jitter(biketrain.df$hour, 2), y = humidity),
+  geom_point(data = bikeplot.df, aes(x = jitter(bikeplot.df$hour, 2), y = humidity),
                                   pch = 20, colour = "seagreen3", alpha = 0.3) +
   geom_line(data = data.for.plot, aes(x = hour, y = medianhumidity), stat = "identity") +
   labs(x = "Hour of Day (00-23)", y = "humidity",
@@ -321,7 +465,7 @@ humidity.by.hour
 
 # Scatter Plot : atemp vs humidity
 # atemp.humid.scatter <- ggplot() +
-#   geom_point(data = biketrain.df, aes(x = jitter(humidity, 2), y = atemp),
+#   geom_point(data = bikeplot.df, aes(x = jitter(humidity, 2), y = atemp),
 #              pch = 20, color = "violetred", alpha = 0.3) +
 #   labs(x = "humidity", y = "atemp", title = "atemp vs humidity")
 # atemp.humid.scatter
@@ -333,7 +477,7 @@ grid.arrange(humidity.weather.scatter, humidity.by.hour, ncol = 2)
 # Count : Holiday vs. Not
 # -------  HOLIDAY USE BOX PLOT --------------
 # As a boxplot
-ggplot(biketrain.df) + geom_boxplot(aes(x = holiday, y = count), 
+ggplot(bikeplot.df) + geom_boxplot(aes(x = holiday, y = count), 
                                     pch = 20, color = "brown", fill = "rosybrown2", alpha = 0.4) + 
   labs(x = "1 = Holiday, 0 = Not", y = "Count", title = "Count by Holiday/Not Holiday")
 
@@ -344,7 +488,7 @@ ggplot(biketrain.df) + geom_boxplot(aes(x = holiday, y = count),
 # <<<<<<< WIND KILLS DEMAND (Or is it never windy?) <<<<<<<<<<<<<<<<<<<<<<<<
 # only 30 distinct values, makes this goofy.
 
-median.windspeed.count <- aggregate(biketrain.df$count, by = list(biketrain.df$windspeed), FUN = median)
+median.windspeed.count <- aggregate(bikeplot.df$count, by = list(bikeplot.df$windspeed), FUN = median)
 names(median.windspeed.count) <- c("windspeed", "mediancount")
 
 # Count by Hour (median) : Bar chart
@@ -357,11 +501,11 @@ windspeed.bar
 
 
 windspeed.scatter <- ggplot() + 
-  geom_point(data = biketrain.df, 
-             aes(x = jitter(biketrain.df$windspeed, 6), y = count),
+  geom_point(data = bikeplot.df, 
+             aes(x = jitter(bikeplot.df$windspeed, 6), y = count),
              pch = 20,
-             # colour = biketrain.df$season,
-             # colour = biketrain.df$hour %/% 5 + 1,
+             # colour = bikeplot.df$season,
+             # colour = bikeplot.df$hour %/% 5 + 1,
              colour = "green4",
              alpha = 0.3) + 
   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + # Good with our without.
@@ -374,7 +518,7 @@ windspeed.scatter <- ggplot() +
   
 
 # Histogram of windspeed speed
-histo <- ggplot(biketrain.df) + geom_histogram(aes(x = windspeed), color = "black",
+histo <- ggplot(bikeplot.df) + geom_histogram(aes(x = windspeed), color = "black",
                                                fill = "green4", alpha = 0.3, binwidth = 1) +
   labs(x = "windspeed (unknown units)", y = "Frequency", title = "Histogram: windspeed")
 
@@ -387,58 +531,51 @@ rm(histo)
 ## side-by-side boxplots
 # use par() to split the plots into panels.
 par(mfcol = c(1, 2))
-boxplot(biketrain.df$count ~ biketrain.df$senate, xlab = "senate", ylab = "count", 
+boxplot(bikeplot.df$count ~ bikeplot.df$senate, xlab = "senate", ylab = "count", 
         col = "pink", main = "Senate in session?")
-boxplot(biketrain.df$count ~ biketrain.df$house, xlab = "house", ylab = "count",
+boxplot(bikeplot.df$count ~ bikeplot.df$house, xlab = "house", ylab = "count",
         col = "lightblue", main = "House in session?")
 
 # --------- GAME ON? ... INCREASED DEMAND !!!!! -------------
 ## side-by-side boxplots
-par(mfcol = c(1, 5))
-boxplot(biketrain.df$count ~ biketrain.df$capitals, xlab = "capitals",
-        ylab = "count", frame = F, col = "indianred")
-boxplot(biketrain.df$count ~ biketrain.df$nationals, xlab = "nationals", 
-        ylab =  NA, yaxt = "n", frame = F, col = "mediumpurple")
-boxplot(biketrain.df$count ~ biketrain.df$wizards, xlab = "wizards", 
-        ylab =  NA, yaxt = "n", frame = F, col = "lavenderblush")
-boxplot(biketrain.df$count ~ biketrain.df$united, xlab = "united",  
-        ylab =  NA, yaxt = "n", frame = F, col = "slateblue")
-boxplot(biketrain.df$count ~ biketrain.df$sporting_event, xlab = "sporting_event",
-        ylab =  NA, yaxt = "n", frame = F, col = "darkred")
+measure.vars = c("capitals", "nationals", "united", "wizards", "sporting_event")
+keeps <- c(measure.vars, "count")
+sports.df <- bikeplot.df[keeps]
 
-par(mfcol = c(1, 1))
-sportinghours.train.df <- subset(biketrain.df, (hour > 17) | (hour > 11 & hour < 16))
-wknd.sportinghours.train.df <- subset(sportinghours.train.df, workingday == 0)
-boxplot(wknd.sportinghours.train.df$count ~ wknd.sportinghours.train.df$sporting_event, 
-        xlab = "sporting_event", ylab = "count", frame = F,
-        col = "darkred", main = "sporting_event: comparable times", sub = "(noon - 15:59 or after 17:59)")
+# tried to get: variable, value, count (as in...    nationals, 1, 250)
+# but I got... count, variable(event), value (0-1)
+sports.df <- melt(sports.df, measure.vars = measure.vars) # , varnames = c("event", "value"))
+
+ggplot(sports.df, aes(x = variable, y = count, fill = value)) + geom_boxplot()
 
 
-
-
-
+sportinghours.train.df <- subset(bikeplot.df, (hour > 17) | (hour > 11 & hour < 16))
+ggplot(sportinghours.train.df, 
+       aes(x = sporting_event, y = count, fill = sporting_event)) + 
+  geom_boxplot() +
+  labs(title = "sporting_event: comparable times", subtitle = "(noon - 15:59 or after 17:59)")
 
 
 # --------- UNIVERSITIES IN SESSION... LOWER DEMAND ??? --------- 
 ## side-by-side boxplots
 par(mfcol = c(1, 3))
-boxplot(biketrain.df$count ~ biketrain.df$cua_session, xlab = "cua_session", ylab = "count",
+boxplot(bikeplot.df$count ~ bikeplot.df$cua_session, xlab = "cua_session", ylab = "count",
         col = "cyan", main = "Catholic U of America")
-boxplot(biketrain.df$count ~ biketrain.df$au_session, xlab = "au_session", ylab = "count",
+boxplot(bikeplot.df$count ~ bikeplot.df$au_session, xlab = "au_session", ylab = "count",
         col = "yellow", main = "American University")
-boxplot(biketrain.df$count ~ biketrain.df$howard_session, xlab = "howard_session", ylab = "count",
+boxplot(bikeplot.df$count ~ bikeplot.df$howard_session, xlab = "howard_session", ylab = "count",
         col = "magenta", main = "Howard University")
 
 par(mfcol = c(1, 3))
-boxplot(biketrain.df$count ~ biketrain.df$session_count, xlab = "session_count", ylab = "count",
+boxplot(bikeplot.df$count ~ bikeplot.df$session_count, xlab = "session_count", ylab = "count",
         col = "brown", main = "# Unis in Session")
 
-boxplot(biketrain.df$count ~ biketrain.df$session_any, xlab = "session_any", ylab = "count",
+boxplot(bikeplot.df$count ~ bikeplot.df$session_any, xlab = "session_any", ylab = "count",
         col = "dodgerblue3", main = "Any Uni in Session")
 
-# boxplot(biketrain.df$count ~ biketrain.df$session_any, xlab = "session_any", ylab = "count",
+# boxplot(bikeplot.df$count ~ bikeplot.df$session_any, xlab = "session_any", ylab = "count",
 #         col = "grey", main = "Any University")
-hist(as.numeric(biketrain.df$session_count), xlab = "session_count", 
+hist(as.numeric(bikeplot.df$session_count), xlab = "session_count", 
      col = "slateblue", main = "Histogram of session_count") # , breaks = 3)
 
 par(mfcol = c(1, 1))
@@ -446,7 +583,7 @@ par(mfcol = c(1, 1))
 
 seasons <- c("Spring", "Summer", "Fall", "Winter")
 
-session_any.box.data <- biketrain.df[c('season', 'session_any', 'count')]
+session_any.box.data <- bikeplot.df[c('season', 'session_any', 'count')]
 # session_any.box.data <- group_by(session_any.box.data, season)
 # session_any.box.data <- melt(session_any.box.data, id.vars = 'season')
 
@@ -463,15 +600,15 @@ session_any.box <- ggplot(session_any.box.data, aes(x = season, y = count, fill 
 # --------- WEATHER AND SEASON --------- 
 ## side-by-side boxplots
 # par(mfcol = c(1, 2))
-# boxplot(biketrain.df$count ~ biketrain.df$weather, xlab = "weather", ylab = "count", main = "count by weather",
+# boxplot(bikeplot.df$count ~ bikeplot.df$weather, xlab = "weather", ylab = "count", main = "count by weather",
 #         sub = "4 = Heavy Rain + Ice Pellets + Thunderstorm + Mist, Snow + Fog")
-# boxplot(biketrain.df$count ~ biketrain.df$season, xlab = "season", ylab = "count", main = "count by season")
-weather.box <- ggplot(biketrain.df) + 
+# boxplot(bikeplot.df$count ~ bikeplot.df$season, xlab = "season", ylab = "count", main = "count by season")
+weather.box <- ggplot(bikeplot.df) + 
   geom_boxplot(aes(x = weather, y = count), pch = 20, color = "black", fill = "blue", alpha = 0.4) + 
   labs(x = "weather (1-4)", y = "Count", title = "Count by weather",
        sub = "4 = Heavy Rain + Ice Pellets + Thunderstorm + Mist, Snow + Fog")
 
-season.box <- ggplot(biketrain.df) + 
+season.box <- ggplot(bikeplot.df) + 
   geom_boxplot(aes(x = season, y = count), pch = 20, color = "black", fill = "green", alpha = 0.4) + 
   labs(x = "season (1 = Spr, 2 = Sum, 3 = Fall, 4 = Win)", y = "Count", title = "Count by season")
 

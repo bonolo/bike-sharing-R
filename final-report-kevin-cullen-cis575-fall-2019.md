@@ -24,6 +24,13 @@ The Kaggle challenge requests the following, where `count` is the number of bicy
 
 **Evaluation statistic:** Root Mean Squared Logarithmic Error (RMSLE)
 
+Based on what I read, RMSLE is ideal for this target variable. See <https://hrngok.github.io/posts/metrics/> for example.
+
+- `count` has a wide range
+- Right-tailed distribution means percentage errors are more important than absolute value.
+- `count` has a wide range
+- A bike sharing scheme would probably want to penalize under estimates more than over estimates
+
 **Submission format**
 
     datetime,count
@@ -206,7 +213,7 @@ When the `house` and `senate` were in session, usage turned out to be lower. Tha
 ![House Senate Boxplot](plots/count-congress-boxplots.png "House Senate Boxplot")
 
 
-Pro sports events (home games) had a noted impact on `count`, especially when the Washington National baseball team is playing. I decided to make my own `sporting_event` variable to combine all four teams for which I had data. However... the spike in `count` may be because games occur during busy periods (noon - 15:59 or after 17:59).
+Pro sports events (home games) seemed to correlate with increase in `count`, apart from Capitals games. I decided to make my own `sporting_event` variable to combine all four teams for which I had data. However... the spike in `count` may be because games occur during busy periods (noon - 15:59 or after 17:59).
 
 ![Boxplot: Sporting Events](plots/sporting-event-boxplot.png "Boxplot: Sporting Events")
 ![Boxplot: Boxplot: Sporting Events during comparable hours](plots/sporting-events-comp-hours.png "Boxplot: Sporting Events during comparable hours")
