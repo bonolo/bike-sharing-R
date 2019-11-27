@@ -61,7 +61,9 @@ keeps <- c("id", "count", "hour", "dayofweek", "season", "holiday", "workingday"
            "windspeed", "house", "senate", "sporting_event", "session_any")
 biketrain.df <- bikeplot.df[keeps]
 
-
+# declare some variables
+boxplot.binary.colors <- c("#E69F00", "#56B4E9")
+seasons <- c("Spring", "Summer", "Fall", "Winter")
 
 # -------------- Data shape & summary ----------------------------
 dim(bikeall.df)
@@ -85,7 +87,7 @@ glimpse(bikeall.df)
 
 
 # --------- Models ----------------------------
-
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 # randomly generate training and validation sets
 set.seed(7)  # set seed for reproducing the partition
@@ -94,7 +96,10 @@ ss <- sample(1:2, size = nrow(biketrain.df), replace = TRUE, prob = c(0.6, 0.4))
 training.df = biketrain.df[ss==1,]
 validation.df = biketrain.df[ss==2,]
 
+
+
 # --- "Multiple linear regression". Adapted from textbook. My best-guess 10 variables. ----------
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 # RMSLE 1.31020 w/out humidity. ME 1.26723 RMSE 141.212
 # RMSLE 1.28159 with humidity. ME 0.93598 RMSE 137.619
 # LOTS of negative predictions to remove.
@@ -124,6 +129,7 @@ summary(bike.lm)
 
 
 # -- linear regression with stepwise variable selection ----------------------------
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 # RMSLE 1.64349. Bummer. ME 1.607 RMSE 136.839
 
 #### Table 6.6
@@ -152,8 +158,9 @@ hist(residuals, breaks = 50, xlab = "residual (predicted - actual)")
 
 
 
-# +++ How do I do a regression tree?  --------------------
-# http://uc-r.github.io/regression_trees
+# +++ Regression tree  --------------------
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+# courtesy of tutorial: http://uc-r.github.io/regression_trees
 
 # performing regression trees
 library(rpart)
@@ -224,7 +231,8 @@ hyper_grid %>%
   top_n(-5, wt = error)
 
 
-# -- Create Optimal tree -------------
+# -- Create Optimal tree ------------------
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 # RMSLE of submitted data: 1.02692. ME: -2.11708 RMSE: 92.3636
 optimal_tree <- rpart(
   formula = count ~ .,
@@ -257,11 +265,19 @@ write.csv(data.frame(datetime = biketest.df$datetime, count = pred_test),
 
 # -- Bagging ???? --------------------------------------
 # http://uc-r.github.io/regression_trees#bag
+# See Chapter 13 for further details on bagging. ---
+
+# -- random forest???
+# -- boosted trees???
 
 
 
+# -- Neural Network ------------------------------------
+# https://datascienceplus.com/neuralnet-train-and-test-neural-networks-using-r/
+# more complex: https://datascienceplus.com/fitting-neural-network-in-r/
 
-# +++ See Chapter 13 for further details on bagging. --------------------
+
+
 
 
 # -------------- Plots -----------------------------------
@@ -518,23 +534,29 @@ windspeed.scatter <- ggplot() +
   
 
 # Histogram of windspeed speed
-histo <- ggplot(bikeplot.df) + geom_histogram(aes(x = windspeed), color = "black",
+wind.histo <- ggplot(bikeplot.df) + geom_histogram(aes(x = windspeed), color = "black",
                                                fill = "green4", alpha = 0.3, binwidth = 1) +
   labs(x = "windspeed (unknown units)", y = "Frequency", title = "Histogram: windspeed")
 
 # Place on grid.
-grid.arrange(histo, windspeed.scatter, ncol=2)
-rm(histo)
+grid.arrange(wind.histo, windspeed.scatter, ncol=2)
 
 
 # ---- CONGRESS IN SESSION... LOWER DEMAND ??? -------------
 ## side-by-side boxplots
-# use par() to split the plots into panels.
-par(mfcol = c(1, 2))
-boxplot(bikeplot.df$count ~ bikeplot.df$senate, xlab = "senate", ylab = "count", 
-        col = "pink", main = "Senate in session?")
-boxplot(bikeplot.df$count ~ bikeplot.df$house, xlab = "house", ylab = "count",
-        col = "lightblue", main = "House in session?")
+
+measure.vars = c("house", "senate")
+keeps <- c(measure.vars, "count")
+congress.df <- bikeplot.df[keeps]
+
+congress.df <- melt(congress.df, measure.vars = measure.vars)
+
+ggplot(congress.df, aes(x = variable, y = count, fill = value)) +
+  geom_boxplot() +
+  scale_fill_manual(values = boxplot.binary.colors) +
+  labs(title = "Congress (house or senate) in session")
+
+
 
 # --------- GAME ON? ... INCREASED DEMAND !!!!! -------------
 ## side-by-side boxplots
@@ -544,65 +566,67 @@ sports.df <- bikeplot.df[keeps]
 
 # tried to get: variable, value, count (as in...    nationals, 1, 250)
 # but I got... count, variable(event), value (0-1)
-sports.df <- melt(sports.df, measure.vars = measure.vars) # , varnames = c("event", "value"))
+sports.df <- melt(sports.df, measure.vars = measure.vars)
 
-ggplot(sports.df, aes(x = variable, y = count, fill = value)) + geom_boxplot()
+ggplot(sports.df, aes(x = variable, y = count, fill = value)) +
+  geom_boxplot() +
+  scale_fill_manual(values = boxplot.binary.colors) +
+  labs(title = "Pro sports events & combined 'sporting_event'")
 
 
+# Boxplot: sporting_event only during comparable times of day
 sportinghours.train.df <- subset(bikeplot.df, (hour > 17) | (hour > 11 & hour < 16))
 ggplot(sportinghours.train.df, 
        aes(x = sporting_event, y = count, fill = sporting_event)) + 
   geom_boxplot() +
+  #theme_minimal() +
+  scale_fill_manual(values = boxplot.binary.colors) +
   labs(title = "sporting_event: comparable times", subtitle = "(noon - 15:59 or after 17:59)")
 
 
 # --------- UNIVERSITIES IN SESSION... LOWER DEMAND ??? --------- 
-## side-by-side boxplots
-par(mfcol = c(1, 3))
-boxplot(bikeplot.df$count ~ bikeplot.df$cua_session, xlab = "cua_session", ylab = "count",
-        col = "cyan", main = "Catholic U of America")
-boxplot(bikeplot.df$count ~ bikeplot.df$au_session, xlab = "au_session", ylab = "count",
-        col = "yellow", main = "American University")
-boxplot(bikeplot.df$count ~ bikeplot.df$howard_session, xlab = "howard_session", ylab = "count",
-        col = "magenta", main = "Howard University")
+measure.vars = c("cua_session", "au_session", "howard_session", "session_any")
+keeps <- c(measure.vars, "count")
+unis.df <- bikeplot.df[keeps]
 
-par(mfcol = c(1, 3))
-boxplot(bikeplot.df$count ~ bikeplot.df$session_count, xlab = "session_count", ylab = "count",
-        col = "brown", main = "# Unis in Session")
+unis.df <- melt(unis.df, measure.vars = measure.vars)
 
-boxplot(bikeplot.df$count ~ bikeplot.df$session_any, xlab = "session_any", ylab = "count",
-        col = "dodgerblue3", main = "Any Uni in Session")
-
-# boxplot(bikeplot.df$count ~ bikeplot.df$session_any, xlab = "session_any", ylab = "count",
-#         col = "grey", main = "Any University")
-hist(as.numeric(bikeplot.df$session_count), xlab = "session_count", 
-     col = "slateblue", main = "Histogram of session_count") # , breaks = 3)
-
-par(mfcol = c(1, 1))
+ggplot(unis.df, aes(x = variable, y = count, fill = value)) +
+  geom_boxplot() +
+  scale_fill_manual(values = boxplot.binary.colors) +
+  labs(title = "Universities in session?")
 
 
-seasons <- c("Spring", "Summer", "Fall", "Winter")
+# Convert session_count to factor to avoid issues with "continuous x aesthetic" from fill = session_count
+bikeplot.df[,'session_count'] <- factor(bikeplot.df[,'session_count'])
+session_count.box <- ggplot(bikeplot.df, aes(x = session_count, y = count, fill = session_count)) +
+  geom_boxplot() +
+  theme(legend.position = "top")  +
+  labs(title = "University session_count")
 
 session_any.box.data <- bikeplot.df[c('season', 'session_any', 'count')]
-# session_any.box.data <- group_by(session_any.box.data, season)
-# session_any.box.data <- melt(session_any.box.data, id.vars = 'season')
-
 session_any.box <- ggplot(session_any.box.data, aes(x = season, y = count, fill = session_any)) + 
   geom_boxplot() +
   scale_x_discrete(labels = seasons) +
+  scale_fill_manual(values = boxplot.binary.colors,) +
   theme(legend.position = "top") +
-  theme_minimal() +
   labs(title = "session_any is not a proxy for season")
+
+# Use geom_bar instead of geom_histogram to avoid Error: StatBin requires a 
+# continuous x variable: the x variable is discrete. Perhaps you want stat="count"?
+session_count.histo <- ggplot(data = bikeplot.df, (aes(x = session_count))) +
+  geom_bar(fill = "slateblue", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of session_count")
+
+# Place on grid.
+grid.arrange(session_count.box, session_any.box, session_count.histo, ncol=3)
 
 
 
 
 # --------- WEATHER AND SEASON --------- 
 ## side-by-side boxplots
-# par(mfcol = c(1, 2))
-# boxplot(bikeplot.df$count ~ bikeplot.df$weather, xlab = "weather", ylab = "count", main = "count by weather",
-#         sub = "4 = Heavy Rain + Ice Pellets + Thunderstorm + Mist, Snow + Fog")
-# boxplot(bikeplot.df$count ~ bikeplot.df$season, xlab = "season", ylab = "count", main = "count by season")
+
 weather.box <- ggplot(bikeplot.df) + 
   geom_boxplot(aes(x = weather, y = count), pch = 20, color = "black", fill = "blue", alpha = 0.4) + 
   labs(x = "weather (1-4)", y = "Count", title = "Count by weather",
