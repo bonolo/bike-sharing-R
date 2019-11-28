@@ -1,3 +1,7 @@
+# -- Intro / Header ---------------
+# CIS 575 Final Project : Fall 2019
+# Kevin F Cullen (solo)
+
 setwd("~/Projects/cis575/bike-sharing")
 
 library(Hmisc)
@@ -10,13 +14,6 @@ library(forecast)
 # library(Metrics)
 
 options(scipen = 100, digits = 6)
-
-# pastecs library
-# - better (per Leo) summary descriptive statistics
-# 
-# stat.desc() : descriptive statistics from pastecs library
-# - displays results in scientific notation
-# - fix this with options(scipen = 100, digits = 4)
 
 
 # --------- Load CSV file. MySQL export is in one file, with a binary flag ---------------
@@ -61,9 +58,27 @@ keeps <- c("id", "count", "hour", "dayofweek", "season", "holiday", "workingday"
            "windspeed", "house", "senate", "sporting_event", "session_any")
 biketrain.df <- bikeplot.df[keeps]
 
-# declare some variables
+# Take out weather = 4. There are only 3 of these observations, which wreaks havoc with modeling.
+# Many times, I get "Error in model.frame.default(Terms, newdata, na.action = na.action, xlev = object$xlevels) : 
+# factor weather has new levels 4"
+# biketrain.df$weather <- as.character(biketrain.df$weather)
+# biketrain.df$weather[biketrain.df$weather =="4"] <- "3"
+# biketrain.df$weather <- as.factor(biketrain.df$weather)
+
+
+
+
+# -- Declare some variables --------------------------------------
 boxplot.binary.colors <- c("#E69F00", "#56B4E9")
 seasons <- c("Spring", "Summer", "Fall", "Winter")
+days.of.week <- c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+weather.colors <- c("blue", "orange", "red", "black") # color per level of weather
+# - weather: (categorical)
+# - 1: Clear, Few clouds, Partly cloudy, Partly cloudy
+# - 2: Mist + Cloudy, Mist + Broken clouds, Mist + Few clouds, Mist
+# - 3: Light Snow, Light Rain + Thunderstorm + Scattered clouds, Light Rain + Scattered clouds
+# - 4: Heavy Rain + Ice Pallets + Thunderstorm + Mist, Snow + Fog
+
 
 # -------------- Data shape & summary ----------------------------
 dim(bikeall.df)
@@ -107,10 +122,8 @@ validation.df = biketrain.df[ss==2,]
 vars_to_use <- c('count', 'hour', 'dayofweek', 'season', 'workingday', 'humidity', # weather, 
                  'temp', 'windspeed', 'house', 'senate', 'session_any')
 
-mlr_train.df <- subset(training.df,
-                   select = vars_to_use)
-mlr_valid.df <- subset(validation.df,
-                       select = vars_to_use)
+mlr_train.df <- subset(training.df, select = vars_to_use)
+mlr_valid.df <- subset(validation.df, select = vars_to_use)
 
 bike.lm <- lm(count ~ ., data = mlr_train.df, na.action = na.exclude)
 # training: ME -0.0000000000135085 RMSE 137.355
@@ -241,8 +254,8 @@ optimal_tree <- rpart(
   control = list(minsplit = 19, maxdepth = 30, cp = 0.01)
 )
 
-pred <- predict(optimal_tree, newdata = validation.df)
-accuracy(pred, validation.df$count)
+rt.optimal.pred <- predict(optimal_tree, newdata = validation.df)
+accuracy(rt.optimal.pred, validation.df$count)
 
 
 
@@ -272,9 +285,95 @@ write.csv(data.frame(datetime = biketest.df$datetime, count = pred_test),
 
 
 
+
+
+
+
+
 # -- Neural Network ------------------------------------
 # https://datascienceplus.com/neuralnet-train-and-test-neural-networks-using-r/
 # more complex: https://datascienceplus.com/fitting-neural-network-in-r/
+
+# Take just the numeric predictors
+vars_to_use <- c("count", "hour", "dayofweek", "season", "weather", "sporting_event",
+                 # "temp", "atemp",
+                 "temp_squared", "humidity", "windspeed")
+
+nn_data.df = subset(biketrain.df, select = vars_to_use)
+
+# Convert some factors to numeric so the Neural Network won't flake out
+nn_data.df[,'dayofweek'] <- as.numeric(nn_data.df[,'dayofweek'])
+nn_data.df[,'season'] <- as.numeric(nn_data.df[,'season'])
+nn_data.df[,'weather'] <- as.numeric(nn_data.df[,'weather'])
+nn_data.df[,'sporting_event'] <- as.numeric(nn_data.df[,'sporting_event'])
+# nn_data.df[,'session_any'] <- as.numeric(nn_data.df[,'session_any'])
+# Same again for test data
+biketest.df[,'dayofweek'] <- as.numeric(biketest.df[,'dayofweek'])
+biketest.df[,'season'] <- as.numeric(biketest.df[,'season'])
+biketest.df[,'weather'] <- as.numeric(biketest.df[,'weather'])
+biketest.df[,'sporting_event'] <- as.numeric(biketest.df[,'sporting_event'])
+# biketest.df[,'session_any'] <- as.numeric(biketest.df[,'session_any'])
+
+# Scale the numeric variables... for model training and validation
+maxs <- apply(nn_data.df, 2, max)
+mins <- apply(nn_data.df, 2, min)
+scaled_data.df <- as.data.frame(scale(nn_data.df, center = mins, scale = maxs - mins))
+
+# Split out train and valid data
+scaled_train.df <- scaled_data.df[ss==1,]
+scaled_valid.df <- scaled_data.df[ss==2,]
+
+# Scale the numeric variables... for test/competition submission
+# Shouldn't I be converting values back from the scale? 
+scaled_biketest.df = subset(biketest.df, select = vars_to_use)
+maxs <- apply(scaled_biketest.df, 2, max)
+mins <- apply(scaled_biketest.df, 2, min)
+scaled_biketest.df <- as.data.frame(scale(scaled_biketest.df, center = mins, scale = maxs - mins))
+
+
+
+# Fit a linear regression model and check accuracy w/ validation set
+# Using the gml() for cross validating purposes.
+# ME -0.0628795 RMSE 147.521 vs. validation
+
+# Run glm against unscaled data.
+glm_valid.df <- nn_data.df[ss==2,]
+
+lm.fit <- glm(count ~ ., data = nn_data.df[ss==1,])
+summary(lm.fit)
+pr.lm <- predict(lm.fit, glm_valid.df)
+accuracy(pr.lm, glm_valid.df$count)
+# MSE.lm <- sum((pr.lm - biketest.df$count)^2)/nrow(biketest.df) # DIDN'T WORK. NA_REAL
+
+
+
+
+library(neuralnet)
+# Algorithm did not converge in 1 of 1 repetition(s) within the stepmax. 
+# Maybe because I forget to set data = scaled_train.df
+# nn <- neuralnet(count ~ hour + dayofweek + season + weather + sporting_event + 
+#                   temp + atemp + humidity + windspeed,
+#                 data = training.df, hidden = c(5, 3),
+#                 linear.output = TRUE)
+
+nn <- neuralnet(count ~ hour + dayofweek + temp_squared + humidity + windspeed,
+                data = scaled_train.df, rep = 2,
+                linear.output = TRUE)
+nn$result.matrix
+plot(nn)
+
+nn.pred <- compute(nn, scaled_valid.df)
+# compare estimated vs actual (scaled data)
+results <- data.frame(actual = scaled_valid.df$count, prediction = nn.pred$net.result)
+accuracy(results$prediction, results$actual)
+
+
+# convert data back to original format
+nn.unscaled.pred <- nn.pred$net.result * (max(nn_data.df$count) - min(nn_data.df$count)) + min(nn_data.df$count)
+test.r <- (glm_valid.df$count) * (max(nn_data.df$count) - min(nn_data.df$count)) + min(nn_data.df$count)
+scaled_results <- data.frame(actual = glm_valid.df$count, prediction = nn.unscaled.pred)
+
+accuracy(scaled_results$prediction, scaled_results$actual)
 
 
 
@@ -300,7 +399,6 @@ ggplot() + geom_histogram(data = bikeplot.df, aes(x = count), color = "black",
 # hour & dayofweek ----------------------------------
 
 # Bar chart : count by dayofweek ---------
-days.of.week <- c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
 dayofweek.bar.data <- group_by(bikeplot.df, dayofweek)
 dayofweek.bar.data <- summarise(dayofweek.bar.data, mean_count = mean(count), median_count = median(count))
 
@@ -441,14 +539,6 @@ grid.arrange(atemp.scatter, temp.scatter, temp.line, ncol = 3)
 median.humidity.count <- aggregate(bikeplot.df$count, by = list(bikeplot.df$humidity), FUN = median)
 names(median.humidity.count) <- c("humidity", "mediancount")
 
-# - weather: (categorical)
-# - 1: Clear, Few clouds, Partly cloudy, Partly cloudy
-# - 2: Mist + Cloudy, Mist + Broken clouds, Mist + Few clouds, Mist
-# - 3: Light Snow, Light Rain + Thunderstorm + Scattered clouds, Light Rain + Scattered clouds
-# - 4: Heavy Rain + Ice Pallets + Thunderstorm + Mist, Snow + Fog
-
-weather.colors <- c("blue", "orange", "red", "black") # color per level of weather
-
 humidity.weather.scatter <- ggplot() +
   # scatter plot
   geom_point(data = bikeplot.df, aes(x = jitter(humidity, 2), y = count, colour = bikeplot.df$weather), 
@@ -544,8 +634,11 @@ grid.arrange(wind.histo, windspeed.scatter, ncol=2)
 
 # ---- CONGRESS IN SESSION... LOWER DEMAND ??? -------------
 ## side-by-side boxplots
+# derive a column which is true if either house or senate is true.
+bikeplot.df$congress_both <- ifelse(bikeplot.df$house == '1' | bikeplot.df$senate == '1', 1, 0)
+bikeplot.df[,'congress_both'] <- factor(bikeplot.df[,'congress_both'])
 
-measure.vars = c("house", "senate")
+measure.vars = c("house", "senate", "congress_both")
 keeps <- c(measure.vars, "count")
 congress.df <- bikeplot.df[keeps]
 
@@ -630,14 +723,15 @@ grid.arrange(session_count.box, session_any.box, session_count.histo, ncol=3)
 weather.box <- ggplot(bikeplot.df) + 
   geom_boxplot(aes(x = weather, y = count), pch = 20, color = "black", fill = "blue", alpha = 0.4) + 
   labs(x = "weather (1-4)", y = "Count", title = "Count by weather",
-       sub = "4 = Heavy Rain + Ice Pellets + Thunderstorm + Mist, Snow + Fog")
+       subtitle = "4 = Heavy Rain + Ice Pellets\n + Thunderstorm + Mist, Snow + Fog")
 
 season.box <- ggplot(bikeplot.df) + 
   geom_boxplot(aes(x = season, y = count), pch = 20, color = "black", fill = "green", alpha = 0.4) + 
-  labs(x = "season (1 = Spr, 2 = Sum, 3 = Fall, 4 = Win)", y = "Count", title = "Count by season")
+  labs(x = "season", y = "Count", title = "Count by season", subtitle = "1 = Spr, 2 = Sum, 3 = Fall, 4 = Win")
 
+weather.histo <- ggplot(bikeplot.df, (aes(x = weather))) +
+  geom_bar(color = "black", alpha = 0.5, fill = "blue") +
+  labs(title = "Histogram of weather")
 
 # Place on grid.
-grid.arrange(weather.box, season.box, ncol=2)
-rm(season.box)
-rm(weather.box)
+grid.arrange(weather.box, weather.histo, season.box, ncol=3)

@@ -182,7 +182,7 @@ I tried several ways to examine the `holiday` variable, all of which showed litt
 
 ![Boxplot: Holiday](plots/holiday-boxplot.png "Boxplot: Holiday")
 
-`weather` and `season` seemed to influence demand. However, spring (1) `count` was much lower than other seasons. Perhaps the service launched that spring.
+`weather` and `season` seemed to influence demand. However, spring (1) `count` was much lower than other seasons. Perhaps the service launched that spring. Weather had 4 categorical values, but one only had a frequency of 3 (among 10,000+ records).
 
 ![Boxplot: Weather and Season](plots/weather-season-boxplot.png "Boxplot: Weather and Season")
 
@@ -248,43 +248,91 @@ I thought about binning the `count` variable, but the object of the competition 
 
 The data from Kaggle appeared to have some previous binning. There were only 30 separate `windspeed` measurements.
 
-`temp` and `atemp` had 50 and 65 distinct values, but their range had been shifted to start with 0. There were no units provided, but DC temperatures get below 0 Centigrade and rarely approach 0 Fahrenheit, so I am not sure what the exact prior transformation was.
+`temp` and `atemp` had 50 and 65 distinct values and range for both had been shifted to start with 0. There were no units provided, but DC temperatures get below 0 Centigrade and rarely approach 0 Fahrenheit, so I am not sure what the exact prior transformation was.
 
-`weather` was previously binned by the Kaggle competition. ~16 text descriptions were binned into three numeric values.
-- 1: Clear, Few clouds, Partly cloudy, Partly cloudy
-- 2: Mist + Cloudy, Mist + Broken clouds, Mist + Few clouds, Mist
-- 3: Light Snow, Light Rain + Thunderstorm + Scattered clouds, Light Rain + Scattered clouds
-- 4: Heavy Rain + Ice Pallets + Thunderstorm + Mist, Snow + Fog
+`weather` was previously binned by the Kaggle competition. ~16 text descriptions were binned into three numeric values. Level 4 had only 4 observations, which caused all sorts of problems with modeling. Sometimes 4 would only appear in validation and not training.
+1. Clear, Few clouds, Partly cloudy, Partly cloudy
+2. Mist + Cloudy, Mist + Broken clouds, Mist + Few clouds, Mist
+3. Light Snow, Light Rain + Thunderstorm + Scattered clouds, Light Rain + Scattered clouds
+4. Heavy Rain + Ice Pallets + Thunderstorm + Mist, Snow + Fog
 
 ### 6.d. Partitions
 
 I started by adding an id column to aid in sampling/partitioning and accuracy testing: `bikeall.df$id <- seq.int(nrow(bikeall.df))`
 
-Because this Kaggle data set has no validation values in the testing data file, I created random training and validation data sets from the Kaggle train.csv file.
+Because this Kaggle data set has no validation values in the testing data file, I created random training (60%) and validation (40%) data sets from the Kaggle train.csv file. I set a seed and used the same samples for all models when training & evaluating.
+
+    ss <- sample(1:2, size = nrow(biketrain.df), replace = TRUE, prob = c(0.6, 0.4))
+    training.df = biketrain.df[ss==1,]
+    validation.df = biketrain.df[ss==2,]
 
 ### 6.e. Derivations
 
+I derived the following variables from existing data...
 - Separate `hour` field from the built-in `datetime` hourly time stamp. (MySQL `HOUR()` function)
 - Separate `dayofweek` field from the built-in `datetime` hourly time stamp. (MySQL `DAYOFWEEK()` function)
-- Used SQL transformations to `SELECT` start times for pro sporting events and then `INSERT` derived records for hours when people would be traveling to, attending, or traveling away from home games of 4 teams. (`INSERT INTO... SELECT`)
+
+I derived additional records for hours when people would be traveling to, attending, or traveling away from home games of 4 teams. I used SQL to `SELECT` start times for pro sporting events and then `INSERT` new records for the additional time periods. (`INSERT INTO... SELECT`)
 
 ### 6.f. Transformations
 
 - Consolidated 4 teams' data into a single, binary `sporting_event` variable. (`LEFT OUTER JOIN` with a `SUBSELECT`)
 - Consolidated 3 binary variables (`cua_session`, `howard_session`, `au_session`) into 1 (`session_any`), as long as any were true, since they were generally true at the same times. These variables represented three universities. (`LEFT OUTER JOIN` with a `SUBSELECT`)
+- During plotting, I combined `house` and `senate` into a binary `congress_both` value, but did not include this in analysis. `bikeplot.df$congress_both <- ifelse(bikeplot.df$house == '1' | bikeplot.df$senate == '1', 1, 0)`
 - During preliminary data exploration, I made log_scale transformations on data (`windspeed`, `temp`) to aid me in visualizing, but I didn't think they would be helpful in models.
 - While plotting, I noticed scale_y_sqrt() made correlations more obvious because `count` on the y axis was very positively skewed. I added a count_sqrt variable to the MySQL export just in case.
 
+For the Neural Network
+- I converted several factors back to numeric. The Neural Network became grumpy when I used factors.
+- I scaled all input variables using techniques found in this tutorial: <https://datascienceplus.com/fitting-neural-network-in-r/>
+
+      maxs <- apply(nn_train.df, 2, max)
+      mins <- apply(nn_train.df, 2, min)
+      scaled <- as.data.frame(scale(nn_train.df, center = mins, scale = maxs - mins))
+
 ### 6.g. Clustering
 
-I couldn't think of any reasons to cluster the data, given my assumption that regression analysis would provide the best results.
+I couldn't think of any reasons to cluster the data, given my assumption that regression analysis or neural networks would provide the best results.
 
 
 ## 7. Description of data modeling/analyses and assessments
 
+### Multiple linear regression
+
+- Quick and dirty
+- Used my best-guess 10 variables, based on visualizations
+- Adapted from textbook
+
+### Linear regression with stepwise variable selection
+
+- Wow... 3 of my derived variables and 2 of my added/created variables !!!
+
+Call:
+
+    lm(formula = count ~ id + hour + dayofweek + season + weather +
+         temp_squared + atemp + humidity + windspeed + house + session_any,
+       data = training.df, na.action = na.exclude)
+
+### Regression tree
+
+courtesy of tutorial: http://uc-r.github.io/regression_trees
+
+- Textbook was sparse on predicting continuous outcome variables.
+- The RMSLE was better than linear regression. I was a bit surprised.
+
+### Neural Network
+
+This took me a long time to get working.
+
+- I had to scale variables, which required some code refactoring.
+- nn often crashed out with error that "Algorithm did not converge in 1 of 1 repetition(s) within the stepmax."
+  - I thought this was due to no scaling at first, due to recommendations I read.
+  - Still happened after scaling.
+- Training models took a long time. Especially with the 7-10 variables I threw at it.
 
 
 ## 8. Explanation of model comparisons and model selection
+
 
 
 
