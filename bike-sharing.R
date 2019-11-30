@@ -44,18 +44,43 @@ bikeall.df[,'au_session']<-factor(bikeall.df[,'au_session'])
 bikeall.df[,'howard_session']<-factor(bikeall.df[,'howard_session'])
 bikeall.df[,'session_any']<-factor(bikeall.df[,'session_any'])
 
+# make a copy with columns we want to scale
+columns.to.scale <- c("hour", "dayofweek", "season", "weather",
+                      "temp", "temp_squared", "atemp", "humidity", "windspeed")
+scaled_all.df <- subset(bikeall.df, select = columns.to.scale)
+
+# Convert some of those columns back to numerics
+scaled_all.df[,'dayofweek'] <- as.numeric(scaled_all.df[,'dayofweek'])
+scaled_all.df[,'season'] <- as.numeric(scaled_all.df[,'season'])
+scaled_all.df[,'weather'] <- as.numeric(scaled_all.df[,'weather'])
+
+# Scale the numeric variables.
+maxs <- apply(scaled_all.df, 2, max)
+mins <- apply(scaled_all.df, 2, min)
+scaled_all.df <- as.data.frame(scale(scaled_all.df, center = mins, scale = maxs - mins))
+
+# Prepend 'scaled_' to scaled variables
+colnames(scaled_all.df) <- paste("scaled", colnames(scaled_all.df), sep = "_")
+
+# ... and recombine with main dataframe
+bikeall.df <- data.frame(bikeall.df, scaled_all.df)
+
+
 # Dataframe to build predictions for contest submission
 biketest.df <- subset(bikeall.df, train == 0)
 
 # All the vars for plotting. Using train == 1 because we need `count`
 bikeplot.df <- subset(bikeall.df, train == 1)
 
+
 # Keep only variables we would use for predictions.
 # Skipping stuff like casual/registered counts, individual sporting events/calendars.
 # Put these in a data frames used to build models.
 keeps <- c("id", "count", "hour", "dayofweek", "season", "holiday", "workingday", 
            "weather", "temp", "temp_squared", "atemp", "humidity", 
-           "windspeed", "house", "senate", "sporting_event", "session_any")
+           "windspeed", "house", "senate", "sporting_event", "session_any",
+           "scaled_hour", "scaled_dayofweek", "scaled_season", "scaled_weather", 
+           "scaled_temp", "scaled_temp_squared", "scaled_atemp", "scaled_humidity", "scaled_windspeed")
 biketrain.df <- bikeplot.df[keeps]
 
 # Take out weather = 4. There are only 3 of these observations, which wreaks havoc with modeling.
@@ -88,7 +113,6 @@ stat.desc(bikeall.df)
 
 summary(bikeall.df)
 median(bikeall.df$count)
-bikeall.df[,c("datetime","count","nationals")]
 
 str(bikeall.df)
 describe(bikeall.df)
@@ -258,8 +282,6 @@ rt.optimal.pred <- predict(optimal_tree, newdata = validation.df)
 accuracy(rt.optimal.pred, validation.df$count)
 
 
-
-
 # -- Predict from competition data. Remove negatives and write to CSV ------------------------------------
 
 ## Predictions with test/competition data.
@@ -273,6 +295,8 @@ pred_test[pred_test < 0] <- 0
 # 2011-01-20 00:00:00,0
 write.csv(data.frame(datetime = biketest.df$datetime, count = pred_test),
           file = "output/regression_tree_optimal.csv", row.names=FALSE)
+
+
 
 
 
@@ -324,7 +348,7 @@ scaled_train.df <- scaled_data.df[ss==1,]
 scaled_valid.df <- scaled_data.df[ss==2,]
 
 # Scale the numeric variables... for test/competition submission
-# Shouldn't I be converting values back from the scale? 
+# Will need to convert values back before submitting to Kaggle
 scaled_biketest.df = subset(biketest.df, select = vars_to_use)
 maxs <- apply(scaled_biketest.df, 2, max)
 mins <- apply(scaled_biketest.df, 2, min)
@@ -334,7 +358,8 @@ scaled_biketest.df <- as.data.frame(scale(scaled_biketest.df, center = mins, sca
 
 # Fit a linear regression model and check accuracy w/ validation set
 # Using the gml() for cross validating purposes.
-# ME -0.0628795 RMSE 147.521 vs. validation
+# ME    RMSE    MAE      MPE    MAPE
+# Test set -0.355104 149.457 109.78 -275.437 322.332
 
 # Run glm against unscaled data.
 glm_valid.df <- nn_data.df[ss==2,]
@@ -349,16 +374,27 @@ accuracy(pr.lm, glm_valid.df$count)
 
 
 library(neuralnet)
-# Algorithm did not converge in 1 of 1 repetition(s) within the stepmax. 
-# Maybe because I forget to set data = scaled_train.df
-# nn <- neuralnet(count ~ hour + dayofweek + season + weather + sporting_event + 
-#                   temp + atemp + humidity + windspeed,
-#                 data = training.df, hidden = c(5, 3),
+# nn <- neuralnet(count ~ hour + dayofweek + temp_squared + humidity + windspeed,
+#                   +                 data = scaled_train.df, hidden = c(4, 2), rep = 3,
+#                   +                 linear.output = TRUE)
+# Error in if (ncol.matrix < rep) { : argument is of length zero
+
+# Error in if (ncol.matrix < rep) { : argument is of length zero
+# hidden = c(4, 2), rep = 4,
+
+# Warning message: Algorithm did not converge in 3 of 3 repetition(s) within the stepmax. 
+# nn <- neuralnet(count ~ hour + dayofweek + temp_squared + humidity + windspeed,
+#                 data = scaled_train.df, hidden = c(4, 2), rep = 3,
 #                 linear.output = TRUE)
 
+
+# ME     RMSE      MAE  MPE MAPE
+# Test set -0.000587354 0.155101 0.114154 -Inf  Inf (scaled)
+# Test set -0.573257 151.378 111.414 -342.524 369.05 (de-scaled)
 nn <- neuralnet(count ~ hour + dayofweek + temp_squared + humidity + windspeed,
-                data = scaled_train.df, rep = 2,
+                data = scaled_train.df,
                 linear.output = TRUE)
+
 nn$result.matrix
 plot(nn)
 
@@ -368,19 +404,190 @@ results <- data.frame(actual = scaled_valid.df$count, prediction = nn.pred$net.r
 accuracy(results$prediction, results$actual)
 
 
-# convert data back to original format
+# convert data back to original format and re-check accuracy
 nn.unscaled.pred <- nn.pred$net.result * (max(nn_data.df$count) - min(nn_data.df$count)) + min(nn_data.df$count)
 test.r <- (glm_valid.df$count) * (max(nn_data.df$count) - min(nn_data.df$count)) + min(nn_data.df$count)
 scaled_results <- data.frame(actual = glm_valid.df$count, prediction = nn.unscaled.pred)
-
 accuracy(scaled_results$prediction, scaled_results$actual)
 
+
+
+# -- NN prediction from competition data. ------------------------------------
+# RMSLE of submitted data: 1.27802
+
+nn.test.pred <- compute(nn, scaled_biketest.df)
+# de-scale data. Using range, max, min from training data, because that's what
+# predictions were based on and I don't have counts for test anyway.
+nn.test.pred <- nn.test.pred$net.result * (max(nn_data.df$count) - min(nn_data.df$count)) + min(nn_data.df$count)
+descaled.competition.results <- data.frame(datetime = biketest.df$datetime, count = nn.test.pred)
+
+# write submission in kaggle format
+# datetime,count
+# 2011-01-20 00:00:00,0
+write.csv(descaled.competition.results, file = "output/nn_defaults_5_variables.csv", row.names=FALSE)
+
+
+
+
+
+# +++ Regression tree: Scaled data  --------------
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+library(rpart)
+library(rpart.plot)
+
+# performing regression trees
+scaled_tree_1 <- rpart(
+  formula = count ~ .,
+  data = scaled_train.df,
+  method = "anova"
+)
+
+rpart.plot(scaled_tree_1)
+plotcp(scaled_tree_1) # Maximum size/depth of tree = 15, or so it seems.
+
+scaled_tree_2 <- rpart(
+  formula = count ~ .,
+  data = scaled_train.df,
+  method = "anova",
+  control = list(cp = 0, xval = 10)
+)
+
+plotcp(scaled_tree_2) # Maximum size/depth looks way higher here.
+abline(v = 17, lty = "dashed")
+abline(v = 30, lty = "dashed")
+
+# perform a grid search
+hyper_grid <- expand.grid(
+  minsplit = seq(5, 20, 1),
+  maxdepth = seq(55, 65, 1)
+)
+
+# iterate through each minsplit and maxdepth combination.
+# save each model into its own list item.
+models <- list()
+
+for (i in 1:nrow(hyper_grid)) {
+  # get minsplit, maxdepth values at row i
+  minsplit <- hyper_grid$minsplit[i]
+  maxdepth <- hyper_grid$maxdepth[i]
+  
+  # train a model and store in the list
+  models[[i]] <- rpart(
+    formula = count ~ .,
+    data = scaled_train.df,
+    method = "anova",
+    control = list(minsplit = minsplit, maxdepth = maxdepth)
+  )
+}
+
+# function to get optimal cp
+get_cp <- function(x) {
+  min <- which.min(x$cptable[, "xerror"])
+  cp <- x$cptable[min, "CP"] 
+}
+
+# function to get minimum error
+get_min_error <- function(x) {
+  min <- which.min(x$cptable[, "xerror"])
+  xerror <- x$cptable[min, "xerror"] 
+}
+
+hyper_grid %>%
+  mutate(
+    cp    = purrr::map_dbl(models, get_cp),
+    error = purrr::map_dbl(models, get_min_error)
+  ) %>%
+  arrange(error) %>%
+  top_n(-5, wt = error)
+
+
+# -- Create Optimal tree ------------------
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+scaled_optimal_tree <- rpart(
+  formula = count ~ .,
+  data = scaled_train.df,
+  method = "anova",
+  control = list(minsplit = 16, maxdepth = 58, cp = 0.01)
+)
+
+rt.scaled.optimal.pred <- predict(scaled_optimal_tree, newdata = scaled_valid.df)
+# compare estimated vs actual (scaled data)
+accuracy(rt.scaled.optimal.pred, scaled_valid.df$count)
+# compare again... descaled
+#           ME        RMSE     MAE      MPE     MAPE
+# Test set  0.703772  107.414  75.8141 -142.462 167.203
+rt.descaled.optimal.pred <- rt.scaled.optimal.pred * (max(nn_data.df$count) - min(nn_data.df$count)) + min(nn_data.df$count)
+accuracy(rt.descaled.optimal.pred, validation.df$count)
+
+
+# -- Regression tree: scaled data - prediction from competition data. ------------------------------------
+# RMSLE of submitted data: 0.91241
+
+rt.scaled.test.optimal.pred <- predict(scaled_optimal_tree, newdata = scaled_biketest.df)
+# de-scale data. Using range, max, min from training data, because that's what
+# predictions were based on and I don't have counts for test anyway.
+rt.scaled.test.optimal.pred <- rt.scaled.test.optimal.pred * (max(nn_data.df$count) - min(nn_data.df$count)) + min(nn_data.df$count)
+rt.descaled.competition.results <- data.frame(datetime = biketest.df$datetime, count = rt.scaled.test.optimal.pred)
+
+# write submission in kaggle format
+# datetime,count
+# 2011-01-20 00:00:00,0
+write.csv(rt.descaled.competition.results, file = "output/regression_tree_scaled_data.csv", row.names=FALSE)
+
+plot(scaled_optimal_tree)
+prp(scaled_optimal_tree)
+
+
+
+# -- Linear regression. Single, scaled variable --------------------
+#          ME       RMSE    MAE      MPE    MAPE
+# Test set 0.743597 168.015 127.788 -569.081 599.818
+
+
+# Just scale the predictors.
+# scaled_lm_data.df <- subset(biketrain.df, select = c("temp"))
+scaled_lm_data.df <- subset(biketrain.df, select = c("humidity", "temp", "hour", "dayofweek"))
+scaled_lm_biketest_data.df <- subset(biketest.df, select = c("humidity", "temp", "hour", "dayofweek"))
+maxs <- apply(scaled_lm_data.df, 2, max)
+mins <- apply(scaled_lm_data.df, 2, min)
+scaled_lm_data.df <- as.data.frame(scale(scaled_lm_data.df, center = mins, scale = maxs - mins))
+scaled_lm_biketest_data.df <- as.data.frame(scale(scaled_lm_biketest_data.df, center = mins, scale = maxs - mins))
+
+# Add count back in
+# scaled_lm_data.df <- data.frame(count = biketrain.df$count, scaled_lm_data.df$temp)
+scaled_lm_data.df <- data.frame(count = biketrain.df$count, scaled_lm_data.df)
+
+# Split out train and valid data
+scaled_lm_train.df <- scaled_lm_data.df[ss==1,]
+scaled_lm_valid.df <- scaled_lm_data.df[ss==2,]
+
+scaled.lm <- lm(count ~ ., data = scaled_lm_train.df, na.action = na.exclude)
+scaled.lm.train.pred <- predict(scaled.lm, na.action = na.pass)
+accuracy(scaled.lm.train.pred, scaled_lm_train.df$count)
+
+# predict validation data
+scaled.lm.valid.pred <- predict(scaled.lm, newdata = scaled_lm_valid.df, na.action = na.pass)
+accuracy(scaled.lm.valid.pred, scaled_lm_valid.df$count)
+
+# -- Predict from competition data. Remove negatives and write to CSV ------------------------------------
+
+## Predictions with test/competition data.
+scaled.lm.test.pred <- predict(scaled.lm, newdata = scaled_lm_biketest_data.df, na.action = na.pass)
+
+# convert negative values to 0
+scaled.lm.test.pred[scaled.lm.test.pred < 0] <- 0
+
+# write submission in kaggle format
+# datetime,count
+# 2011-01-20 00:00:00,0
+write.csv(data.frame(datetime = biketest.df$datetime, count = pred_test),
+          file = "output/regression_tree_optimal.csv", row.names=FALSE)
 
 
 
 
 # -------------- Plots -----------------------------------
-
 
 
 # Leadoff Graphic: Histogram of count ----------------------
@@ -400,7 +607,7 @@ ggplot() + geom_histogram(data = bikeplot.df, aes(x = count), color = "black",
 
 # Bar chart : count by dayofweek ---------
 dayofweek.bar.data <- group_by(bikeplot.df, dayofweek)
-dayofweek.bar.data <- summarise(dayofweek.bar.data, mean_count = mean(count), median_count = median(count))
+dayofweek.bar.data <- summarise(dayofweek.bar.data, mean = mean(count), median = median(count))
 
 dayofweek.bar.data <- melt(dayofweek.bar.data, id.vars = 'dayofweek')
 dayofweek.bar <- ggplot() + 
@@ -408,7 +615,8 @@ dayofweek.bar <- ggplot() +
            aes(x = dayofweek, y = value, fill = variable),
            stat = 'identity', position = 'dodge', alpha = 0.7) + 
   scale_x_discrete(labels = days.of.week) +
-  theme(legend.position="top")
+  theme(legend.position="top") +
+  labs(title = "count by dayofweek", y = "count")
   # coord_flip()
 dayofweek.bar
 
@@ -427,7 +635,8 @@ hour.day.tile <- ggplot(hour.tile.data, aes(hour, dayofweek)) +
   scale_fill_gradient(low = "white", high = "black") +
   scale_y_discrete(labels = days.of.week, breaks = c(7, 6, 5, 4, 3, 2, 1)) +
   scale_x_continuous(breaks = seq(0, 24, 3)) +
-  theme_classic() +
+  # theme_classic() +
+  theme(legend.position="top") +
   labs(title = "Heatmap: mean_count")
 hour.day.tile
 
@@ -456,10 +665,11 @@ hour.scatter2 <- ggplot() +
              pch = 16, alpha = 0.3) + 
   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
   scale_color_manual(values=workingday.colors) + 
-  labs(title = "Count by Hour (color: workingday) w/ median trendline", 
+  labs(title = "count by hour w/ median trendline", subtitle = "color: workingday",
        x = "Hour of Day (00-23)", y = "Count", color = "workingday") +
   # line plot : median.hourly.count
-  geom_line(data = median.hourly.count, aes(x = hour, y = mediancount), size = 1, color = "grey25") # +
+  geom_line(data = median.hourly.count, aes(x = hour, y = mediancount), size = 1, color = "grey25") +
+  theme(legend.position="top")
   # geom_smooth(data = median.hourly.count, aes(x = hour, y = mediancount), method = "auto")
 
 
@@ -507,13 +717,13 @@ atemp.scatter <- ggplot() +
               aes(x = atemp, y = mediancount, color = mediancount), 
               method = "auto") +
   # se = FALSE, na.rm = TRUE, formula = y ~ poly(x, 2), method = "lm", 
-  labs(x = "atemp", y = "count", title = "count by atemp 'feels like' ºC - w/ median trendline")
+  labs(x = "atemp", y = "count", title = "count by atemp - w/ median trend", subtitle = "'feels like' ºC")
 atemp.scatter
 
 # temp
 temp.scatter <- ggplot() + geom_point(data = bikeplot.df, aes(x = jitter(bikeplot.df$temp, 2), y = count),
                                   pch = 16, colour = "salmon", alpha = 0.3) +
-  labs(x = "temp", y = "Count", title = "Count by temp (ºC) - w/ median trendline") + 
+  labs(x = "temp", y = "Count", title = "Count by temp (ºC) - w/ median trend") + 
   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) +
   scale_y_sqrt() +
   # geom_line(data = median.temp.count, aes(x = temp, y = mediancount), size = 1, color = "grey28") +
@@ -523,7 +733,7 @@ temp.scatter <- ggplot() + geom_point(data = bikeplot.df, aes(x = jitter(bikeplo
 data.for.plot <- aggregate(bikeplot.df$temp, by = list(bikeplot.df$hour), FUN = median)
 names(data.for.plot) <- c("hour", "mediantemp")
 temp.line <- ggplot() + geom_line(data = data.for.plot, aes(x = hour, y = mediantemp),
-                                  stat = "identity") + ylim(0, 41)
+                                  stat = "identity") + ylim(0, 41) +
   labs(title = "temp varies little through day (~ 5ºC)", y = "median temp", x = "Hour of Day (00-23)")
 
 
@@ -545,8 +755,9 @@ humidity.weather.scatter <- ggplot() +
              pch = 16, alpha = 0.3) +
   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
   scale_y_sqrt() +
-  scale_color_manual(values=weather.colors) + 
-  labs(title = "Count by Humidity (color: weather) w/ median trendline", 
+  scale_color_manual(values=weather.colors) +
+  theme(legend.position="top") + 
+  labs(title = "Count by humidity w/ median trendline", subtitle = "color: weather",
        x = "Humidity", y = "Count", color = "weather") +
   # line plot : median.humidity.count
   # geom_line(data = median.humidity.count, aes(x = humidity, y = mediancount), size = 1, color = "grey28") +
@@ -563,7 +774,7 @@ humidity.by.hour <- ggplot() +
   #          stat = "identity") +
   geom_point(data = bikeplot.df, aes(x = jitter(bikeplot.df$hour, 2), y = humidity),
                                   pch = 20, colour = "seagreen3", alpha = 0.3) +
-  geom_line(data = data.for.plot, aes(x = hour, y = medianhumidity), stat = "identity") +
+  geom_line(data = data.for.plot, aes(x = hour, y = medianhumidity), stat = "identity")
   labs(x = "Hour of Day (00-23)", y = "humidity",
        title = "Humidity by hour w/ median trendline",
        color = "medianhumidity")
@@ -585,7 +796,7 @@ grid.arrange(humidity.weather.scatter, humidity.by.hour, ncol = 2)
 # As a boxplot
 ggplot(bikeplot.df) + geom_boxplot(aes(x = holiday, y = count), 
                                     pch = 20, color = "brown", fill = "rosybrown2", alpha = 0.4) + 
-  labs(x = "1 = Holiday, 0 = Not", y = "Count", title = "Count by Holiday/Not Holiday")
+  labs(x = "holiday", y = "count", title = "count by holiday (binary)")
 
 
 
@@ -727,7 +938,8 @@ weather.box <- ggplot(bikeplot.df) +
 
 season.box <- ggplot(bikeplot.df) + 
   geom_boxplot(aes(x = season, y = count), pch = 20, color = "black", fill = "green", alpha = 0.4) + 
-  labs(x = "season", y = "Count", title = "Count by season", subtitle = "1 = Spr, 2 = Sum, 3 = Fall, 4 = Win")
+  scale_x_discrete(labels = seasons) +
+  labs(y = "count", title = "Count by season") #, subtitle = "1 = Spr, 2 = Sum, 3 = Fall, 4 = Win")
 
 weather.histo <- ggplot(bikeplot.df, (aes(x = weather))) +
   geom_bar(color = "black", alpha = 0.5, fill = "blue") +

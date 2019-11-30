@@ -182,9 +182,11 @@ I tried several ways to examine the `holiday` variable, all of which showed litt
 
 ![Boxplot: Holiday](plots/holiday-boxplot.png "Boxplot: Holiday")
 
-`weather` and `season` seemed to influence demand. However, spring (1) `count` was much lower than other seasons. Perhaps the service launched that spring. Weather had 4 categorical values, but one only had a frequency of 3 (among 10,000+ records).
+`weather` and `season` seemed to influence demand. However, spring (1) `count` was much lower than other seasons. Perhaps the service launched that spring.
 
-![Boxplot: Weather and Season](plots/weather-season-boxplot.png "Boxplot: Weather and Season")
+Weather had 4 categorical values, but weather = 4 only appeared in three observations (among 10,000+ records). This caused problems in modeling because the value would sometimes only appear in validation, but not training.
+
+![Boxplot: Weather and Season](plots/weather-season-boxplot-histo.png "Boxplot: Weather and Season")
 
 My observations about temperature (both `atemp` and `temp`) were
 - `count` is rarely low when the temperature is very high
@@ -221,10 +223,9 @@ Pro sports events (home games) seemed to correlate with increase in `count`, apa
 
 Universities all tended to be in or out of session at the same time (as seen in the histogram below). So... I created a consolidated `session_any` variable.
 
-`count` was lower across the board when universities were in session. That surprised me.
+`count` was lower across the board when universities were in session. That surprised me. I thought this might be a proxy for `season`, since `count` is high in summer when universities are out of session. However, my boxplot showed the the `session_any` variable was a good predictor regardless of `season`.
 
-![University boxplots](plots/uni-boxplots.png "University boxplots")
-![University boxplots and histo](plots/uni-boxplots+histo.png "University boxplots and histo")
+![University boxplots](plots/university-plots.png "University boxplots")
 
 
 ## 6. Description of data preparation
@@ -297,11 +298,24 @@ I couldn't think of any reasons to cluster the data, given my assumption that re
 
 ## 7. Description of data modeling/analyses and assessments
 
+    Model                         RMSLE
+    Multiple linear regression
+    Multiple linear regression
+      w/ stepwise selection
+    Regression tree - Optimized
+    Neural network
+    Regression tree - Scaled
+
+
+### Linear regression - General
+
+This was fairly easy, so I tried a number of different combinations with lm() and glm(). However, linear regression created many negative predictions. Negative numbers cause errors when trying to calculate RMSLE, so I chose to convert negative predictions to 0.
+
 ### Multiple linear regression
 
-- Quick and dirty
-- Used my best-guess 10 variables, based on visualizations
-- Adapted from textbook
+
+My first decent prediction was based on my 10 best-guess variables and used all defaults. I picked the variables based on my observations. I adapted code from the textbook to build the model.
+
 
 ### Linear regression with stepwise variable selection
 
@@ -325,10 +339,18 @@ courtesy of tutorial: http://uc-r.github.io/regression_trees
 This took me a long time to get working.
 
 - I had to scale variables, which required some code refactoring.
-- nn often crashed out with error that "Algorithm did not converge in 1 of 1 repetition(s) within the stepmax."
+- nn often finished with error that "Algorithm did not converge in 1 of 1 (or 3 or 3, or 4 of 4) repetition(s) within the stepmax."
   - I thought this was due to no scaling at first, due to recommendations I read.
-  - Still happened after scaling.
-- Training models took a long time. Especially with the 7-10 variables I threw at it.
+  - It continued to happen after after scaling, even when I tinkered with the `stepmax` setting and the `hidden` parameter which controls the internal levels in the network.
+- I spent a lot of time tinkering with the following to get a model to work
+  - hidden: the hidden layers parameter
+  - reps: number of training repetitions
+- Training models took a long time. Especially when I threw 7-10 variables at it.
+
+
+### Regression Tree Using Scaled Data
+
+Since I had already scaled the data and my neural network didn't perform as well as the regression tree, I decided to use the scaled data in a regression tree. Performance was better, even using fewer variables.
 
 
 ## 8. Explanation of model comparisons and model selection

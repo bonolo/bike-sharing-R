@@ -38,6 +38,9 @@ SELECT * FROM kaggle_data WHERE DAYOFMONTH(`datetime`) > 19;
 SELECT * FROM kaggle_data WHERE DAYOFMONTH(`datetime`) < 20;
 SELECT COUNT(*) FROM kaggle_data WHERE DAYOFMONTH(`datetime`) < 20;
 
+SELECT weather, COUNT(*) AS frequency
+FROM kaggle_data
+GROUP BY weather;
 
 SELECT DISTINCT kaggle_data.temp FROM kaggle_data ORDER BY temp;
 SELECT DISTINCT kaggle_data.atemp FROM kaggle_data ORDER BY atemp;
@@ -219,7 +222,8 @@ SELECT 'train', 'datetime', 'hour', 'dayofweek', 'season', 'holiday', 'workingda
 -- UNION the header row with the data
 UNION ALL
 
-SELECT IF(DAYOFMONTH(kaggle_data.`datetime`) < 20, 1, 0) AS train
+SELECT ROWNUMBER() AS id
+, IF(DAYOFMONTH(kaggle_data.`datetime`) < 20, 1, 0) AS train
 , kaggle_data.`datetime`
 , HOUR(kaggle_data.`datetime`) AS hour
 , DAYOFWEEK(kaggle_data.`datetime`) AS dayofweek
@@ -269,9 +273,9 @@ LEFT OUTER JOIN
 
 LEFT OUTER JOIN bike_sharing.university_sessions
     ON LEFT(kaggle_data.`datetime`, 10) = LEFT(university_sessions.`date`, 10)
-
-INTO OUTFILE '/Users/kcullen/Projects/cis575/bike-sharing/csv-inputs/kaggle_data_plus.csv'
-FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"'
+;
+ INTO OUTFILE '/Users/kcullen/Projects/cis575/bike-sharing/csv-inputs/kaggle_data_plus.csv'
+ FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"'
   LINES TERMINATED BY '\n'
 ;
 
