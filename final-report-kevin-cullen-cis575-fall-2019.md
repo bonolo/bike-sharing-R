@@ -1,18 +1,17 @@
 
-# Project - CIS 575
-# Part 3 - Final Report - Kevin F. Cullen
-
-(8 to 20 pages excluding appendices)
-
-Relevant output from your analyses should be included in the Appendix and referenced in the body of your report. The due date for the final report is Sunday, December 8.
+# Project - CIS 575 - Final Report - Kevin F. Cullen
 
 ## 1. Executive summary
 
-insert
+This project is a prediction/forecasting exercise which used a combination of models (linear regression, neural networks, regression trees) to predict demand for a bike sharing business, using data from an old Kaggle competition.
 
-content
+I decided to scrounge for my own data to add to the Kaggle predictor variables. My reasoning was...
+1. The Kaggle data was already very clean. By hunting for my own data, I got a chance to do a bit of ETL, cleaning, etc.
+1. The Kaggle data relied heavily on weather, which is difficult to know in advance (especially with any accuracy).
+1. I have no experience with this sort of modeling, so I thought I might improve my results by using data which others had not.
+1. It would show some original work on my own part.
 
-here
+The archive of public scores shows an RMSLE range from 0.33756 to 23.38876 (excluding the highest and lowest outliers) across a total of 12,967 entries. My best model had an RMSLE of 0.89715 and would be at 10,016th place.
 
 ## 2. Business problem/opportunity (from proposal)
 
@@ -230,8 +229,9 @@ Universities all tended to be in or out of session at the same time (as seen in 
 
 ## 6. Description of data preparation
 
-Related file:
+Related files:
 
+    bike-sharing.R
     create+select.sql
 
 ### 6.a. Repairs
@@ -284,12 +284,12 @@ I derived additional records for hours when people would be traveling to, attend
 - While plotting, I noticed scale_y_sqrt() made correlations more obvious because `count` on the y axis was very positively skewed. I added a count_sqrt variable to the MySQL export just in case.
 
 For the Neural Network
-- I converted several factors back to numeric. The Neural Network became grumpy when I used factors.
+
+- I converted several factors back to numeric.
 - I scaled all input variables using techniques found in this tutorial: <https://datascienceplus.com/fitting-neural-network-in-r/>
 
-      maxs <- apply(nn_train.df, 2, max)
-      mins <- apply(nn_train.df, 2, min)
-      scaled <- as.data.frame(scale(nn_train.df, center = mins, scale = maxs - mins))
+**Scaling:** Once I had scaled data for the neural network, I went back and used it to re-run and tinker with some of my models to see if I got better results.
+
 
 ### 6.g. Clustering
 
@@ -298,14 +298,23 @@ I couldn't think of any reasons to cluster the data, given my assumption that re
 
 ## 7. Description of data modeling/analyses and assessments
 
-    Model                         RMSLE
-    Multiple linear regression
-    Multiple linear regression
-      w/ stepwise selection
-    Regression tree - Optimized
-    Neural network
-    Regression tree - Scaled
+Related files...
 
+    bike-sharing.R        (R code)
+
+Models & final RMSLE
+
+    Model                            | RMSLE
+    -------------------------------------------
+    Regression tree - scaled data    | 0.89715
+        all training, no validation  |
+    Regression tree - scaled data    | 0.90795
+    Neural network - numeric         | 0.99700
+    Neural network - numeric & binary| 0.99700
+    Regression tree - optimized      | 1.02692
+    Multiple Linear regression       | 1.28159
+    Multiple linear regression       | 1.64349
+        w/ stepwise selection        |
 
 ### Linear regression - General
 
@@ -314,57 +323,91 @@ This was fairly easy, so I tried a number of different combinations with lm() an
 ### Multiple linear regression
 
 
-My first decent prediction was based on my 10 best-guess variables and used all defaults. I picked the variables based on my observations. I adapted code from the textbook to build the model.
+My first decent prediction was based on my 11 best-guess variables and used all defaults. I picked the variables based on my observations. I adapted code from the textbook to build the model. Interestingly, the most helpful predictors were mostly my derived or added variables. None of my scaled variables were chosen.
+
+    Coefficients:
+                 Estimate Std. Error t value             Pr(>|t|)
+    (Intercept)    40.938     11.575    3.54              0.00041 ***
+    hour            7.482      0.274   27.29 < 0.0000000000000002 ***
+    dayofweek2     -0.569     11.648   -0.05              0.96103
+    dayofweek3      9.737     13.063    0.75              0.45607
+    dayofweek4      1.812     12.921    0.14              0.88849
+    dayofweek5     10.790     13.060    0.83              0.40871
+    dayofweek6      6.111     12.806    0.48              0.63327
+    dayofweek7     14.418      6.569    2.19              0.02820 *
+    season2        21.917      6.486    3.38              0.00073 ***
+    season3        -0.800      8.234   -0.10              0.92258
+    season4        75.622      5.414   13.97 < 0.0000000000000002 ***
+    workingday1    25.189     11.432    2.20              0.02760 *
+    humidity       -2.035      0.103  -19.68 < 0.0000000000000002 ***
+    temp            8.080      0.394   20.49 < 0.0000000000000002 ***
+    windspeed       0.338      0.230    1.47              0.14164
+    house1        -37.060      6.280   -5.90         0.0000000038 ***
+    senate1       -29.786      6.374   -4.67         0.0000030238 ***
+    session_any1  -27.228      4.826   -5.64         0.0000000176 ***
 
 
 ### Linear regression with stepwise variable selection
 
-- Wow... 3 of my derived variables and 2 of my added/created variables !!!
-
-Call:
-
-    lm(formula = count ~ id + hour + dayofweek + season + weather +
-         temp_squared + atemp + humidity + windspeed + house + session_any,
-       data = training.df, na.action = na.exclude)
-
-### Regression tree
-
-courtesy of tutorial: http://uc-r.github.io/regression_trees
-
-- Textbook was sparse on predicting continuous outcome variables.
-- The RMSLE was better than linear regression. I was a bit surprised.
+These results surprsied me. The stepwise variable selection chose many of my derived or added variables, but the RMSLE was by far the worst of all models. Perhaps the model was over-fit. Even though this model performed poorly, I used the weights displayed by `summary()` to guide me when choosing variables for the neural networks and regression trees I built.
 
 ### Neural Network
 
 This took me a long time to get working.
 
-- I had to scale variables, which required some code refactoring.
+- I had to scale variables, which required some code refactoring. All the sample code I found involved scaling and de-scaling the target variable. I got that to work, but it seemed pointless, so I went back and re-wrote my code to leave my target variable unscaled.
+- I tried adding some binary predictors to the neural network without scaling, but they actually lowered the ME and RMSE.
 - nn often finished with error that "Algorithm did not converge in 1 of 1 (or 3 or 3, or 4 of 4) repetition(s) within the stepmax."
   - I thought this was due to no scaling at first, due to recommendations I read.
-  - It continued to happen after after scaling, even when I tinkered with the `stepmax` setting and the `hidden` parameter which controls the internal levels in the network.
+  - It continued to happen after after scaling, even when I tinkered with parameters.
 - I spent a lot of time tinkering with the following to get a model to work
   - hidden: the hidden layers parameter
   - reps: number of training repetitions
-- Training models took a long time. Especially when I threw 7-10 variables at it.
+- Training models took a long time. Especially when I used 7-10 variables.
 
+I only managed to make the neural network produce a model with numeric-only predictors when I left all settings at default and hand-picked the following variables.
 
-### Regression Tree Using Scaled Data
+    scaled_hour + scaled_dayofweek + scaled_temp + scaled_humidity + scaled_windspeed
 
-Since I had already scaled the data and my neural network didn't perform as well as the regression tree, I decided to use the scaled data in a regression tree. Performance was better, even using fewer variables.
+I did create some neural networks with 2 hidden layers when I added some binary variables, but these models had the same results and RMSLE as the simpler, numeric-only models.
+
+### Regression tree
+
+The textbook was sparse on predicting continuous outcome variables with R, so I had to dig around the Internet for information on regression trees. I built this with heavy reliance on the following tutorial: <http://uc-r.github.io/regression_trees>
+
+The RMSLE for this model was decent, depending upon the random sample used to build the tree. (I didn't set a seed at first.) I was surprised that a regression tree performed roughly equal to the neural networks, for which I had great hope.
+
+### Regression Tree Using Scaled Data (Most accurate)
+
+Since I had already scaled the data and my neural network performed about the same as the regression tree, I decided to use the scaled data in a regression tree. Performance was better, even using fewer variables. This was a pleasant surprise.
+
+For giggles, I finished by using my entire training data set and no validation. This gave me a slight boost in RMSLE.
 
 
 ## 8. Explanation of model comparisons and model selection
 
+I was unable to calculate RMSLE on my own, even with validation data. I found several packages which claimed to calculate RMSLE, but each package caused other packages I was using to fail.
+
+I found a few home-built formulas from others, but none of them worked, either. I decided to use ME and RMSE figures from R's `accuracy()` function for initial testing. Once I thought a model was in decent working order, I submitted it to Kaggle. Unfortunately, Kaggle scoring can be slow. It seemed to throttle my submissions after I had run 2-3 in a day. Therefore, I wasn't able to use my true test metric often.
+
+After building my first set of models, I went back and used scaled data in them, but results weren't much improved. In the end, I simply sorted my Kaggle submissions by RMSLE to see which had worked the best.
 
 
+## 9. Conclusions and recommendations
 
-## 9. Conclusions and recommendations (i.e., what did you learn from the analysis; did you meet your stated business objective(s); how can the results of your analysis address the business problem/opportunity; what further analyses, that builds on your work, can be in done in the future)
+The biggest surprise from my analysis was how well my regression trees worked. They turned out to be the most accurate, though I had expected them to perform the worst.
 
+Scaling data turned out to be quite useful and easy. On a whim, I used my scaled data in my regression tree code and got a big boost in accuracy.
 
+I was disappointed by the neural networks. Perhaps I could have done better with improved sampling and validation, but that could apply across the board. I stuck with a 60% training and 40% validation split, but perhaps that was a poor idea.
 
+Polynomial regression might have worked better than my models, but I could not understand any of the explanations I found.
 
+I was pleased that the predictors I added to Kaggle's own set were consistently weighted highly. These were both derived/decomposed variables and data I hunted down and added on my own.
 
+I learned a lot about R from this project. I thought it was worth spending all the extra time to teach myself plotting and modeling in R because...
 
-
-
-
+1. If I had used SAS, I would have spent most of my time dealing with bugs and crashes. I figured I would just use that time to learn R instead.
+1. I didn't feel like I learned anything in the SAS assignments.
+1. Concepts from the lectures still applied in R.
+1. When this course is over, I can use R to my heart's content. After this semester, I won't have access to SAS, so time invested in learning SAS is a waste.

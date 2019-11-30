@@ -22,8 +22,6 @@ options(scipen = 100, digits = 6)
 # 17379 total
 
 bikeall.df <- read.csv("csv-inputs/kaggle_data_plus.csv", na.strings = "\\N", header = TRUE)
-# create id column
-bikeall.df$id <- seq.int(nrow(bikeall.df))
 
 # Convert a few things to factors
 # bikeall.df[,'hour']<-factor(bikeall.df[,'hour'])
@@ -44,6 +42,7 @@ bikeall.df[,'au_session']<-factor(bikeall.df[,'au_session'])
 bikeall.df[,'howard_session']<-factor(bikeall.df[,'howard_session'])
 bikeall.df[,'session_any']<-factor(bikeall.df[,'session_any'])
 
+# -- Scaling ---------------
 # make a copy with columns we want to scale
 columns.to.scale <- c("hour", "dayofweek", "season", "weather",
                       "temp", "temp_squared", "atemp", "humidity", "windspeed")
@@ -64,6 +63,7 @@ colnames(scaled_all.df) <- paste("scaled", colnames(scaled_all.df), sep = "_")
 
 # ... and recombine with main dataframe
 bikeall.df <- data.frame(bikeall.df, scaled_all.df)
+rm(scaled_all.df)
 
 
 # Dataframe to build predictions for contest submission
@@ -76,7 +76,7 @@ bikeplot.df <- subset(bikeall.df, train == 1)
 # Keep only variables we would use for predictions.
 # Skipping stuff like casual/registered counts, individual sporting events/calendars.
 # Put these in a data frames used to build models.
-keeps <- c("id", "count", "hour", "dayofweek", "season", "holiday", "workingday", 
+keeps <- c("count", "hour", "dayofweek", "season", "holiday", "workingday", 
            "weather", "temp", "temp_squared", "atemp", "humidity", 
            "windspeed", "house", "senate", "sporting_event", "session_any",
            "scaled_hour", "scaled_dayofweek", "scaled_season", "scaled_weather", 
@@ -132,7 +132,8 @@ glimpse(bikeall.df)
 set.seed(7)  # set seed for reproducing the partition
 
 ss <- sample(1:2, size = nrow(biketrain.df), replace = TRUE, prob = c(0.6, 0.4))
-training.df = biketrain.df[ss==1,]
+# training.df = biketrain.df[ss==1,]
+training.df = biketrain.df
 validation.df = biketrain.df[ss==2,]
 
 
@@ -140,7 +141,7 @@ validation.df = biketrain.df[ss==2,]
 # --- "Multiple linear regression". Adapted from textbook. My best-guess 10 variables. ----------
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 # RMSLE 1.31020 w/out humidity. ME 1.26723 RMSE 141.212
-# RMSLE 1.28159 with humidity. ME 0.93598 RMSE 137.619
+# RMSLE 1.28159 with humidity. ME 0.516658 RMSE 144.158
 # LOTS of negative predictions to remove.
 
 vars_to_use <- c('count', 'hour', 'dayofweek', 'season', 'workingday', 'humidity', # weather, 
@@ -166,8 +167,9 @@ summary(bike.lm)
 
 
 # -- linear regression with stepwise variable selection ----------------------------
+# Throw everything at it.
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-# RMSLE 1.64349. Bummer. ME 1.607 RMSE 136.839
+# RMSLE 1.64349. Bummer. ME 29.2465 RMSE 210.187
 
 #### Table 6.6
 # use step() to run stepwise regression.
@@ -176,22 +178,12 @@ bike.lm <- lm(count ~ ., data = training.df, na.action = na.exclude)
 bike.step.lm <- step(bike.lm, direction = "both")
 summary(bike.step.lm)
 
-# Wow... 3 of my derived variables and 2 of my added/created variables !!!
-# Call: lm(formula = count ~ id + hour + dayofweek + season + weather + 
-     # temp_squared + atemp + humidity + windspeed + house + session_any, 
-   # data = training.df, na.action = na.exclude)
-
 bike.step.lm.pred <- predict(bike.step.lm, training.df)
 # validation...  ME 1.607 RMSE 136.839
 accuracy(bike.step.lm.pred, validation.df$count) 
 
-
 residuals <- bike.step.lm.pred - validation.df$count
 hist(residuals, breaks = 50, xlab = "residual (predicted - actual)")
-
-
-
-
 
 
 
@@ -210,7 +202,7 @@ m1 <- rpart(
 )
 
 rpart.plot(m1)
-plotcp(m1) # Maximum size/depth of tree = 17, or so it seems.
+plotcp(m1) # Maximum size/depth of tree = 16, or so it seems.
 
 m2 <- rpart(
   formula = count ~ .,
@@ -220,13 +212,13 @@ m2 <- rpart(
 )
 
 plotcp(m2) # Maximum size/depth looks way higher here.
-abline(v = 17, lty = "dashed")
-abline(v = 30, lty = "dashed")
+abline(v = 16, lty = "dashed")
+abline(v = 65, lty = "dashed")
 
 # perform a grid search
 hyper_grid <- expand.grid(
   minsplit = seq(5, 20, 1),
-  maxdepth = seq(20, 30, 1)
+  maxdepth = seq(55, 65, 1)
 )
 
 # iterate through each minsplit and maxdepth combination.
@@ -281,19 +273,18 @@ optimal_tree <- rpart(
 rt.optimal.pred <- predict(optimal_tree, newdata = validation.df)
 accuracy(rt.optimal.pred, validation.df$count)
 
+rpart.plot(optimal_tree)
+
 
 # -- Predict from competition data. Remove negatives and write to CSV ------------------------------------
-
+# RMSLE: 1.02692
 ## Predictions with test/competition data.
-pred_test <- predict(optimal_tree, newdata = biketest.df, na.action = na.pass)
-
-# convert negative values to 0
-pred_test[pred_test < 0] <- 0
+rt.optimal.pred <- predict(optimal_tree, newdata = biketest.df, na.action = na.pass)
 
 # write submission in kaggle format
 # datetime,count
 # 2011-01-20 00:00:00,0
-write.csv(data.frame(datetime = biketest.df$datetime, count = pred_test),
+write.csv(data.frame(datetime = biketest.df$datetime, count = rt.optimal.pred),
           file = "output/regression_tree_optimal.csv", row.names=FALSE)
 
 
@@ -311,66 +302,31 @@ write.csv(data.frame(datetime = biketest.df$datetime, count = pred_test),
 
 
 
-
-
-
 # -- Neural Network ------------------------------------
 # https://datascienceplus.com/neuralnet-train-and-test-neural-networks-using-r/
 # more complex: https://datascienceplus.com/fitting-neural-network-in-r/
 
-# Take just the numeric predictors
-vars_to_use <- c("count", "hour", "dayofweek", "season", "weather", "sporting_event",
-                 # "temp", "atemp",
-                 "temp_squared", "humidity", "windspeed")
+# Take just the binary and scaled numeric predictors
+vars_to_use <- c("count", "scaled_hour", "scaled_dayofweek", "scaled_season", "scaled_weather", 
+                 "house", "senate", "scaled_temp", "scaled_humidity", "scaled_windspeed",
+                 "session_any")
+nn_data.df <- subset(biketrain.df, select = vars_to_use)
+nn_test.df <- subset(biketest.df, select = vars_to_use)
 
-nn_data.df = subset(biketrain.df, select = vars_to_use)
+# Change some factors to numeric
+nn_data.df[,'house'] <- as.numeric(nn_data.df[,'house'])
+nn_data.df[,'senate'] <- as.numeric(nn_data.df[,'senate'])
+nn_data.df[,'session_any'] <- as.numeric(nn_data.df[,'session_any'])
+# and for test
+nn_test.df[,'house'] <- as.numeric(nn_test.df[,'house'])
+nn_test.df[,'senate'] <- as.numeric(nn_test.df[,'senate'])
+nn_test.df[,'session_any'] <- as.numeric(nn_test.df[,'session_any'])
 
-# Convert some factors to numeric so the Neural Network won't flake out
-nn_data.df[,'dayofweek'] <- as.numeric(nn_data.df[,'dayofweek'])
-nn_data.df[,'season'] <- as.numeric(nn_data.df[,'season'])
-nn_data.df[,'weather'] <- as.numeric(nn_data.df[,'weather'])
-nn_data.df[,'sporting_event'] <- as.numeric(nn_data.df[,'sporting_event'])
-# nn_data.df[,'session_any'] <- as.numeric(nn_data.df[,'session_any'])
-# Same again for test data
-biketest.df[,'dayofweek'] <- as.numeric(biketest.df[,'dayofweek'])
-biketest.df[,'season'] <- as.numeric(biketest.df[,'season'])
-biketest.df[,'weather'] <- as.numeric(biketest.df[,'weather'])
-biketest.df[,'sporting_event'] <- as.numeric(biketest.df[,'sporting_event'])
-# biketest.df[,'session_any'] <- as.numeric(biketest.df[,'session_any'])
 
-# Scale the numeric variables... for model training and validation
-maxs <- apply(nn_data.df, 2, max)
-mins <- apply(nn_data.df, 2, min)
-scaled_data.df <- as.data.frame(scale(nn_data.df, center = mins, scale = maxs - mins))
 
 # Split out train and valid data
-scaled_train.df <- scaled_data.df[ss==1,]
-scaled_valid.df <- scaled_data.df[ss==2,]
-
-# Scale the numeric variables... for test/competition submission
-# Will need to convert values back before submitting to Kaggle
-scaled_biketest.df = subset(biketest.df, select = vars_to_use)
-maxs <- apply(scaled_biketest.df, 2, max)
-mins <- apply(scaled_biketest.df, 2, min)
-scaled_biketest.df <- as.data.frame(scale(scaled_biketest.df, center = mins, scale = maxs - mins))
-
-
-
-# Fit a linear regression model and check accuracy w/ validation set
-# Using the gml() for cross validating purposes.
-# ME    RMSE    MAE      MPE    MAPE
-# Test set -0.355104 149.457 109.78 -275.437 322.332
-
-# Run glm against unscaled data.
-glm_valid.df <- nn_data.df[ss==2,]
-
-lm.fit <- glm(count ~ ., data = nn_data.df[ss==1,])
-summary(lm.fit)
-pr.lm <- predict(lm.fit, glm_valid.df)
-accuracy(pr.lm, glm_valid.df$count)
-# MSE.lm <- sum((pr.lm - biketest.df$count)^2)/nrow(biketest.df) # DIDN'T WORK. NA_REAL
-
-
+scaled_train.df <- nn_data.df[ss==1,]
+scaled_valid.df <- nn_data.df[ss==2,]
 
 
 library(neuralnet)
@@ -387,11 +343,13 @@ library(neuralnet)
 #                 data = scaled_train.df, hidden = c(4, 2), rep = 3,
 #                 linear.output = TRUE)
 
-
+# Bog-standard neural network
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 # ME     RMSE      MAE  MPE MAPE
-# Test set -0.000587354 0.155101 0.114154 -Inf  Inf (scaled)
 # Test set -0.573257 151.378 111.414 -342.524 369.05 (de-scaled)
-nn <- neuralnet(count ~ hour + dayofweek + temp_squared + humidity + windspeed,
+# RMSLE: 0.99700
+nn <- neuralnet(count ~ scaled_hour + scaled_dayofweek + scaled_temp + 
+                  scaled_humidity + scaled_windspeed,
                 data = scaled_train.df,
                 linear.output = TRUE)
 
@@ -399,32 +357,52 @@ nn$result.matrix
 plot(nn)
 
 nn.pred <- compute(nn, scaled_valid.df)
-# compare estimated vs actual (scaled data)
+# compare estimated vs actual
 results <- data.frame(actual = scaled_valid.df$count, prediction = nn.pred$net.result)
 accuracy(results$prediction, results$actual)
 
 
-# convert data back to original format and re-check accuracy
-nn.unscaled.pred <- nn.pred$net.result * (max(nn_data.df$count) - min(nn_data.df$count)) + min(nn_data.df$count)
-test.r <- (glm_valid.df$count) * (max(nn_data.df$count) - min(nn_data.df$count)) + min(nn_data.df$count)
-scaled_results <- data.frame(actual = glm_valid.df$count, prediction = nn.unscaled.pred)
-accuracy(scaled_results$prediction, scaled_results$actual)
 
-
-
-# -- NN prediction from competition data. ------------------------------------
-# RMSLE of submitted data: 1.27802
-
-nn.test.pred <- compute(nn, scaled_biketest.df)
-# de-scale data. Using range, max, min from training data, because that's what
-# predictions were based on and I don't have counts for test anyway.
-nn.test.pred <- nn.test.pred$net.result * (max(nn_data.df$count) - min(nn_data.df$count)) + min(nn_data.df$count)
-descaled.competition.results <- data.frame(datetime = biketest.df$datetime, count = nn.test.pred)
+# NN prediction from competition data.
+# RMSLE of submitted data: 0.99700
+nn.test.pred <- compute(nn, biketest.df)
+nn.competition.results <- data.frame(datetime = biketest.df$datetime, count = nn.test.pred$net.result)
 
 # write submission in kaggle format
 # datetime,count
 # 2011-01-20 00:00:00,0
-write.csv(descaled.competition.results, file = "output/nn_defaults_5_variables.csv", row.names=FALSE)
+write.csv(nn.competition.results, file = "output/nn_defaults_5_variables.csv", row.names=FALSE)
+
+
+
+# Try again, with some more variables.
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#          ME      RMSE     MAE     MPE    MAPE
+# Test set 1.03678 182.913 144.025 -768.79 801.252
+# RMSLE of submitted data: 0.99700
+nn_binaries <- neuralnet(count ~ scaled_hour + scaled_dayofweek + scaled_temp + 
+                  scaled_humidity + scaled_windspeed + scaled_season +
+                    senate + house + session_any,
+                data = scaled_train.df, hidden = c(6, 3), rep = 3,
+                linear.output = TRUE)
+
+nn_binaries$result.matrix
+plot(nn_binaries)
+
+nn_binaries.pred <- compute(nn_binaries, scaled_valid.df)
+results_nn_binaries <- data.frame(actual = scaled_valid.df$count, prediction = nn_binaries.pred$net.result)
+accuracy(results_nn_binaries$prediction, results$actual)
+
+# Prediction from competition data.
+# RMSLE of submitted data: 0.99700
+nn_binaries.test.pred <- compute(nn_binaries, nn_test.df)
+nn_binaries.competition.results <- data.frame(datetime = biketest.df$datetime, count = nn_binaries.test.pred$net.result)
+
+# write submission in kaggle format
+# datetime,count
+# 2011-01-20 00:00:00,0
+write.csv(nn.competition.results, file = "output/nn_binaries.csv", row.names=FALSE)
+
 
 
 
@@ -432,6 +410,9 @@ write.csv(descaled.competition.results, file = "output/nn_defaults_5_variables.c
 
 # +++ Regression tree: Scaled data  --------------
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#          ME       RMSE     MAE      MPE    MAPE
+# Test set 0.123124 105.127 74.08 -141.174 165.475
+# RMSLE of submitted data: 0.90795
 
 library(rpart)
 library(rpart.plot)
@@ -444,7 +425,7 @@ scaled_tree_1 <- rpart(
 )
 
 rpart.plot(scaled_tree_1)
-plotcp(scaled_tree_1) # Maximum size/depth of tree = 15, or so it seems.
+plotcp(scaled_tree_1) # Maximum size/depth of tree = 17, or so it seems.
 
 scaled_tree_2 <- rpart(
   formula = count ~ .,
@@ -454,13 +435,13 @@ scaled_tree_2 <- rpart(
 )
 
 plotcp(scaled_tree_2) # Maximum size/depth looks way higher here.
-abline(v = 17, lty = "dashed")
-abline(v = 30, lty = "dashed")
+abline(v = 55, lty = "dashed")
+abline(v = 65, lty = "dashed")
 
 # perform a grid search
 hyper_grid <- expand.grid(
   minsplit = seq(5, 20, 1),
-  maxdepth = seq(55, 65, 1)
+  maxdepth = seq(60, 70, 1)
 )
 
 # iterate through each minsplit and maxdepth combination.
@@ -512,31 +493,25 @@ scaled_optimal_tree <- rpart(
 )
 
 rt.scaled.optimal.pred <- predict(scaled_optimal_tree, newdata = scaled_valid.df)
-# compare estimated vs actual (scaled data)
+# compare estimated vs actual
 accuracy(rt.scaled.optimal.pred, scaled_valid.df$count)
-# compare again... descaled
-#           ME        RMSE     MAE      MPE     MAPE
-# Test set  0.703772  107.414  75.8141 -142.462 167.203
-rt.descaled.optimal.pred <- rt.scaled.optimal.pred * (max(nn_data.df$count) - min(nn_data.df$count)) + min(nn_data.df$count)
-accuracy(rt.descaled.optimal.pred, validation.df$count)
 
 
 # -- Regression tree: scaled data - prediction from competition data. ------------------------------------
-# RMSLE of submitted data: 0.91241
-
-rt.scaled.test.optimal.pred <- predict(scaled_optimal_tree, newdata = scaled_biketest.df)
-# de-scale data. Using range, max, min from training data, because that's what
-# predictions were based on and I don't have counts for test anyway.
-rt.scaled.test.optimal.pred <- rt.scaled.test.optimal.pred * (max(nn_data.df$count) - min(nn_data.df$count)) + min(nn_data.df$count)
+# RMSLE of submitted data: 0.90795
+rt.scaled.test.optimal.pred <- predict(scaled_optimal_tree, newdata = nn_test.df)
 rt.descaled.competition.results <- data.frame(datetime = biketest.df$datetime, count = rt.scaled.test.optimal.pred)
 
 # write submission in kaggle format
 # datetime,count
 # 2011-01-20 00:00:00,0
-write.csv(rt.descaled.competition.results, file = "output/regression_tree_scaled_data.csv", row.names=FALSE)
+# write.csv(rt.descaled.competition.results, file = "output/regression_tree_scaled_data.csv", row.names=FALSE)
+write.csv(rt.descaled.competition.results, file = "output/regression_tree_scaled_all_train_data.csv", row.names=FALSE)
 
 plot(scaled_optimal_tree)
+rpart.plot(scaled_optimal_tree)
 prp(scaled_optimal_tree)
+
 
 
 
