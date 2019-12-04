@@ -1,6 +1,21 @@
+# -- Plots ---------------
+# CIS 575 Final Project : Fall 2019
+# Kevin F Cullen (solo)
+
+# Run `bike-sharing-setup.R` first.
+# That's where the library() calls and CSV reads live.
 
 
-# ++ Plots -----------------------------------
+# All the vars for plotting. ----------------
+
+# Using train == 1 because we need `count`
+bikeplot.df <- subset(bikeall.df, train == 1)
+
+# Shave off the highest outliers in count
+bikeplot.df$count_shaved <- bikeplot.df$count
+bikeplot.df$count_shaved[bikeplot.df$count_shaved > 
+                           quantile(bikeplot.df$count_shaved, c(.90))] <- quantile(bikeplot.df$count_shaved, c(.90))
+
 
 # Declare some variables
 boxplot.binary.colors <- c("#E69F00", "#56B4E9")

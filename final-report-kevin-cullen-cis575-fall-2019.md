@@ -394,7 +394,10 @@ My first decent prediction was based on my 11 best-guess variables and used all 
 
 ### Linear regression with stepwise variable selection
 
-These results surprsied me. The stepwise variable selection chose many of my derived or added variables, but the RMSLE was by far the worst of all models. Perhaps the model was over-fit. Even though this model performed poorly, I used the weights displayed by `summary()` to guide me when choosing variables for the neural networks and regression trees I built.
+These results surprsied me. The stepwise variable selection chose many of my derived or added variables, but the RMSLE was originally the worst of all models by far. Perhaps the model was over-fit. Even though this model performed poorly, I used the weights displayed by `summary()` to guide me when choosing variables for the neural networks and regression trees I built.
+
+Late in the project, after I had added a number of predictors (including `is_daylight` and `month`), the scored RMSLE went from 1.64349 to 1.26428.
+
 
 ### Neural Network
 
@@ -438,9 +441,9 @@ For giggles, I finished by using my entire training data set to train this best 
 
 ## 8. Explanation of model comparisons and model selection
 
-I was unable to calculate RMSLE on my own, even with validation data. I found several packages which claimed to calculate RMSLE, but each package caused other packages I was using to fail.
+The Kaggle competition specified RMSLE (Root Mean Squared Logarithmic Error) as the selected evaluation statistic. I found a few R packages which claimed to calculate it, but the RMSLE values calculated for my training & validation data were often quite different that what Kaggle calculated for my test/scoring dataset. I also used ME and RMSE figures from R's `accuracy()` function for initial testing, but those don't correlate well with RMSLE.
 
-I found a few home-built formulas from others, but none of them worked, either. I decided to use ME and RMSE figures from R's `accuracy()` function for initial testing. Once I thought a model was in decent working order, I submitted it to Kaggle. Unfortunately, Kaggle scoring can be slow. It seemed to throttle my submissions after I had run 2-3 in a day. Therefore, I wasn't able to use my true test metric often.
+Once I thought a model was in decent working order, I submitted it to Kaggle. Unfortunately, Kaggle scoring can be slow. It seemed to throttle my submissions after I had run 2-3 in a day. Therefore, I wasn't able to use my true test metric often. Every time I got an RMSLE from Kaggle, I put it in the R code comments so I could keep track.
 
 After building my first set of models, I went back and used scaled data in them, but results weren't much improved. In the end, I simply sorted my Kaggle submissions by RMSLE to see which had worked the best.
 
@@ -464,4 +467,5 @@ I learned a lot about R from this project. I thought it was worth spending all t
 1. Even after the SAS-based assignments, I still felt clueless about how to do anything on my own. Visualization seemed impossible.
 1. Concepts from the lectures still applied in R.
 1. After this semester, I won't have access to SAS.
-1. Faced with a choice between spending countless hours dealing with SAS instability and crashes or many hours of learning R, I chose to learn R.
+1. I signed up for CIS 576 next semester, a course which includes plotting in R.
+1. Faced with a choice between spending countless hours dealing with SAS instability and crashes or many hours of learning R, I chose to learn R .
