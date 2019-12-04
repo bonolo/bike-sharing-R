@@ -215,18 +215,22 @@ ORDER BY start_hour;
  * a binary "training" field.
  */
  -- Get a row of headers so we can put them in CSV export
-SELECT 'train', 'datetime', 'hour', 'dayofweek', 'season', 'holiday', 'workingday', 'weather', 'temp', 'temp_squared', 'atemp'
+SELECT 'train', 'datetime', 'hour', 'dayofweek', 'month', 'is_daylight'
+, 'season', 'holiday', 'workingday', 'weather', 'temp', 'temp_squared', 'atemp'
 , 'humidity', 'windspeed', 'casual', 'registered', 'count', 'count_sqrt', 'house', 'senate', 'capitals', 'nationals'
 , 'united', 'wizards', 'sporting_event', 'cua_session', 'au_session', 'howard_session', 'session_count', 'session_any'
 
 -- UNION the header row with the data
 UNION ALL
 
-SELECT ROWNUMBER() AS id
-, IF(DAYOFMONTH(kaggle_data.`datetime`) < 20, 1, 0) AS train
+SELECT IF(DAYOFMONTH(kaggle_data.`datetime`) < 20, 1, 0) AS train
 , kaggle_data.`datetime`
 , HOUR(kaggle_data.`datetime`) AS hour
 , DAYOFWEEK(kaggle_data.`datetime`) AS dayofweek
+, MONTH(kaggle_data.`datetime`) AS month
+, (TIME(kaggle_data.`datetime`) > sunrise_sunset.Sunrise 
+   AND TIME(kaggle_data.`datetime`) < sunrise_sunset.Sunset
+   ) AS is_daylight
 , kaggle_data.season
 , kaggle_data.holiday
 , kaggle_data.workingday
@@ -273,7 +277,11 @@ LEFT OUTER JOIN
 
 LEFT OUTER JOIN bike_sharing.university_sessions
     ON LEFT(kaggle_data.`datetime`, 10) = LEFT(university_sessions.`date`, 10)
+    
+INNER JOIN sunrise_sunset
+ON MID(kaggle_data.`datetime`, 6, 5) = MID(sunrise_sunset.Date, 6, 5)
 ;
+
  INTO OUTFILE '/Users/kcullen/Projects/cis575/bike-sharing/csv-inputs/kaggle_data_plus.csv'
  FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"'
   LINES TERMINATED BY '\n'
@@ -285,6 +293,48 @@ from kaggle_data
 group by dayofweek
 ORDER BY dayofweek ASC;
 
-Error Code: 1146. Table 'cis575.bike_sharing' doesn't exist
+
+
+-- atemp (Feels like temperature) between 28 and 30 
+-- tends to occur before 9:00 or after 20:00
+-- these are off-hours, which explains why frequency and mean count are low
+select hour(datetime) as `hour`
+, count(hour(datetime)) AS frequency
+, avg(humidity) AS avg_humidity
+from kaggle_data 
+where atemp > 28 and atemp < 30
+GROUP BY hour(datetime)
+ORDER BY `hour` ASC;
+
+
+
+/*************************
+Sunrise / Sunset data from https://www.sunearthtools.com/solar/sunrise-sunset-calendar.php
+
+**************/
+
+-- DROP TABLE `sunrise_sunset`;
+
+CREATE TABLE `sunrise_sunset` (
+  `Date` date DEFAULT NULL,
+  `Sunrise` time DEFAULT NULL,
+  `Sunset` time DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+TRUNCATE sunrise_sunset;
+
+SELECT * FROM sunrise_sunset;
+
+SELECT `datetime` -- , `count`
+, MID(`datetime`, 6, 5) AS partial
+, Sunrise, Sunset
+, (TIME(`datetime`) > sunrise_sunset.Sunrise AND TIME(`datetime`) < sunrise_sunset.Sunset) AS is_daylight
+FROM kaggle_data
+LEFT OUTER JOIN sunrise_sunset
+ON MID(kaggle_data.`datetime`, 6, 5) = MID(sunrise_sunset.Date, 6, 5);
+
+select date from sunrise_sunset;
+
+
 
 

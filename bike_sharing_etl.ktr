@@ -526,7 +526,85 @@
       <to>capitals_schedule</to>
       <enabled>Y</enabled>
     </hop>
+    <hop>
+      <from>sunrise-sunset.xlsx</from>
+      <to>sunrise_sunset</to>
+      <enabled>Y</enabled>
+    </hop>
   </order>
+  <step>
+    <name>Capitals</name>
+    <type>CsvInput</type>
+    <description />
+    <distribute>Y</distribute>
+    <custom_distribution />
+    <copies>1</copies>
+    <partitioning>
+      <method>none</method>
+      <schema_name />
+    </partitioning>
+    <filename>${Internal.Entry.Current.Directory}/csv-inputs/capitals-schedule-2011.csv</filename>
+    <filename_field />
+    <rownum_field />
+    <include_filename>N</include_filename>
+    <separator>,</separator>
+    <enclosure>"</enclosure>
+    <header>Y</header>
+    <buffer_size>50000</buffer_size>
+    <lazy_conversion>Y</lazy_conversion>
+    <add_filename_result>N</add_filename_result>
+    <parallel>N</parallel>
+    <newline_possible>Y</newline_possible>
+    <encoding />
+    <fields>
+      <field>
+        <name>capitals</name>
+        <type>Integer</type>
+        <format>#</format>
+        <currency>$</currency>
+        <decimal>.</decimal>
+        <group>,</group>
+        <length>15</length>
+        <precision>0</precision>
+        <trim_type>none</trim_type>
+      </field>
+      <field>
+        <name>caps_date</name>
+        <type>Date</type>
+        <format>yyyy-MM-dd</format>
+        <currency>$</currency>
+        <decimal>.</decimal>
+        <group>,</group>
+        <length>-1</length>
+        <precision>-1</precision>
+        <trim_type>none</trim_type>
+      </field>
+      <field>
+        <name>caps_time</name>
+        <type>String</type>
+        <format />
+        <currency>$</currency>
+        <decimal>.</decimal>
+        <group>,</group>
+        <length>8</length>
+        <precision>-1</precision>
+        <trim_type>none</trim_type>
+      </field>
+    </fields>
+    <attributes />
+    <cluster_schema />
+    <remotesteps>
+      <input>
+      </input>
+      <output>
+      </output>
+    </remotesteps>
+    <GUI>
+      <xloc>442</xloc>
+      <yloc>258</yloc>
+      <draw>Y</draw>
+    </GUI>
+  </step>
   <step>
     <name>DC United</name>
     <type>CsvInput</type>
@@ -1377,6 +1455,62 @@
     </GUI>
   </step>
   <step>
+    <name>capitals_schedule</name>
+    <type>TableOutput</type>
+    <description />
+    <distribute>Y</distribute>
+    <custom_distribution />
+    <copies>1</copies>
+    <partitioning>
+      <method>none</method>
+      <schema_name />
+    </partitioning>
+    <connection>MySQL localhost bike_sharing</connection>
+    <schema>bike_sharing</schema>
+    <table>capitals_schedule</table>
+    <commit>1000</commit>
+    <truncate>Y</truncate>
+    <ignore_errors>N</ignore_errors>
+    <use_batch>Y</use_batch>
+    <specify_fields>Y</specify_fields>
+    <partitioning_enabled>N</partitioning_enabled>
+    <partitioning_field />
+    <partitioning_daily>N</partitioning_daily>
+    <partitioning_monthly>Y</partitioning_monthly>
+    <tablename_in_field>N</tablename_in_field>
+    <tablename_field />
+    <tablename_in_table>Y</tablename_in_table>
+    <return_keys>N</return_keys>
+    <return_field />
+    <fields>
+      <field>
+        <column_name>capitals</column_name>
+        <stream_name>capitals</stream_name>
+      </field>
+      <field>
+        <column_name>caps_date</column_name>
+        <stream_name>caps_date</stream_name>
+      </field>
+      <field>
+        <column_name>caps_time</column_name>
+        <stream_name>caps_time</stream_name>
+      </field>
+    </fields>
+    <attributes />
+    <cluster_schema />
+    <remotesteps>
+      <input>
+      </input>
+      <output>
+      </output>
+    </remotesteps>
+    <GUI>
+      <xloc>442</xloc>
+      <yloc>386</yloc>
+      <draw>Y</draw>
+    </GUI>
+  </step>
+  <step>
     <name>dc_united_schedule</name>
     <type>TableOutput</type>
     <description />
@@ -1705,8 +1839,8 @@
     </GUI>
   </step>
   <step>
-    <name>Capitals</name>
-    <type>CsvInput</type>
+    <name>sunrise-sunset.xlsx</name>
+    <type>ExcelInput</type>
     <description />
     <distribute>Y</distribute>
     <custom_distribution />
@@ -1715,54 +1849,91 @@
       <method>none</method>
       <schema_name />
     </partitioning>
-    <filename>${Internal.Entry.Current.Directory}/csv-inputs/capitals-schedule-2011.csv</filename>
-    <filename_field />
-    <rownum_field />
-    <include_filename>N</include_filename>
-    <separator>,</separator>
-    <enclosure>"</enclosure>
     <header>Y</header>
-    <buffer_size>50000</buffer_size>
-    <lazy_conversion>Y</lazy_conversion>
-    <add_filename_result>N</add_filename_result>
-    <parallel>N</parallel>
-    <newline_possible>Y</newline_possible>
-    <encoding />
+    <noempty>Y</noempty>
+    <stoponempty>N</stoponempty>
+    <filefield />
+    <sheetfield />
+    <sheetrownumfield />
+    <rownumfield />
+    <sheetfield />
+    <filefield />
+    <limit>0</limit>
+    <encoding>UTF-8</encoding>
+    <add_to_result_filenames>Y</add_to_result_filenames>
+    <accept_filenames>N</accept_filenames>
+    <accept_field />
+    <accept_stepname />
+    <file>
+      <name>/Users/kcullen/Projects/cis575/bike-sharing/xlsx+raw-csv-inputs/sunrise-sunset.xlsx</name>
+      <filemask />
+      <exclude_filemask />
+      <file_required>N</file_required>
+      <include_subfolders>N</include_subfolders>
+    </file>
     <fields>
       <field>
-        <name>capitals</name>
-        <type>Integer</type>
-        <format>#</format>
-        <currency>$</currency>
-        <decimal>.</decimal>
-        <group>,</group>
-        <length>15</length>
-        <precision>0</precision>
-        <trim_type>none</trim_type>
-      </field>
-      <field>
-        <name>caps_date</name>
+        <name>Date</name>
         <type>Date</type>
-        <format>yyyy-MM-dd</format>
-        <currency>$</currency>
-        <decimal>.</decimal>
-        <group>,</group>
         <length>-1</length>
         <precision>-1</precision>
         <trim_type>none</trim_type>
+        <repeat>N</repeat>
+        <format />
+        <currency />
+        <decimal />
+        <group />
       </field>
       <field>
-        <name>caps_time</name>
-        <type>String</type>
-        <format />
-        <currency>$</currency>
-        <decimal>.</decimal>
-        <group>,</group>
-        <length>8</length>
+        <name>Sunrise</name>
+        <type>Date</type>
+        <length>-1</length>
         <precision>-1</precision>
         <trim_type>none</trim_type>
+        <repeat>N</repeat>
+        <format />
+        <currency />
+        <decimal />
+        <group />
+      </field>
+      <field>
+        <name>Sunset</name>
+        <type>Date</type>
+        <length>-1</length>
+        <precision>-1</precision>
+        <trim_type>none</trim_type>
+        <repeat>N</repeat>
+        <format />
+        <currency />
+        <decimal />
+        <group />
       </field>
     </fields>
+    <sheets>
+      <sheet>
+        <name>Sheet1</name>
+        <startrow>0</startrow>
+        <startcol>0</startcol>
+      </sheet>
+    </sheets>
+    <strict_types>N</strict_types>
+    <error_ignored>N</error_ignored>
+    <error_line_skipped>N</error_line_skipped>
+    <bad_line_files_destination_directory />
+    <bad_line_files_extension>warning</bad_line_files_extension>
+    <error_line_files_destination_directory />
+    <error_line_files_extension>error</error_line_files_extension>
+    <line_number_files_destination_directory />
+    <line_number_files_extension>line</line_number_files_extension>
+    <shortFileFieldName />
+    <pathFieldName />
+    <hiddenFieldName />
+    <lastModificationTimeFieldName />
+    <uriNameFieldName />
+    <rootUriNameFieldName />
+    <extensionFieldName />
+    <sizeFieldName />
+    <spreadsheet_type>POI</spreadsheet_type>
     <attributes />
     <cluster_schema />
     <remotesteps>
@@ -1772,13 +1943,13 @@
       </output>
     </remotesteps>
     <GUI>
-      <xloc>442</xloc>
-      <yloc>258</yloc>
+      <xloc>576</xloc>
+      <yloc>256</yloc>
       <draw>Y</draw>
     </GUI>
   </step>
   <step>
-    <name>capitals_schedule</name>
+    <name>sunrise_sunset</name>
     <type>TableOutput</type>
     <description />
     <distribute>Y</distribute>
@@ -1790,12 +1961,12 @@
     </partitioning>
     <connection>MySQL localhost bike_sharing</connection>
     <schema>bike_sharing</schema>
-    <table>capitals_schedule</table>
+    <table>sunrise_sunset</table>
     <commit>1000</commit>
     <truncate>Y</truncate>
     <ignore_errors>N</ignore_errors>
     <use_batch>Y</use_batch>
-    <specify_fields>Y</specify_fields>
+    <specify_fields>N</specify_fields>
     <partitioning_enabled>N</partitioning_enabled>
     <partitioning_field />
     <partitioning_daily>N</partitioning_daily>
@@ -1806,18 +1977,6 @@
     <return_keys>N</return_keys>
     <return_field />
     <fields>
-      <field>
-        <column_name>capitals</column_name>
-        <stream_name>capitals</stream_name>
-      </field>
-      <field>
-        <column_name>caps_date</column_name>
-        <stream_name>caps_date</stream_name>
-      </field>
-      <field>
-        <column_name>caps_time</column_name>
-        <stream_name>caps_time</stream_name>
-      </field>
     </fields>
     <attributes />
     <cluster_schema />
@@ -1828,8 +1987,8 @@
       </output>
     </remotesteps>
     <GUI>
-      <xloc>442</xloc>
-      <yloc>386</yloc>
+      <xloc>576</xloc>
+      <yloc>384</yloc>
       <draw>Y</draw>
     </GUI>
   </step>

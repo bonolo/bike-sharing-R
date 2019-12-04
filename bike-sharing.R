@@ -11,6 +11,10 @@ require(gridExtra)
 library(pastecs)
 library(reshape2)
 library(forecast)
+library(mgcv)
+library(rpart)
+library(rpart.plot)
+library(neuralnet)
 # library(Metrics)
 
 options(scipen = 100, digits = 6)
@@ -72,11 +76,15 @@ biketest.df <- subset(bikeall.df, train == 0)
 # All the vars for plotting. Using train == 1 because we need `count`
 bikeplot.df <- subset(bikeall.df, train == 1)
 
+# Shave off the highest outliers in count
+bikeplot.df$count_shaved <- bikeplot.df$count
+bikeplot.df$count_shaved[bikeplot.df$count_shaved > 
+                            quantile(bikeplot.df$count_shaved, c(.90))] <- quantile(bikeplot.df$count_shaved, c(.90))
 
 # Keep only variables we would use for predictions.
 # Skipping stuff like casual/registered counts, individual sporting events/calendars.
 # Put these in a data frames used to build models.
-keeps <- c("count", "hour", "dayofweek", "season", "holiday", "workingday", 
+keeps <- c("count", "count_shaved", "hour", "dayofweek", "season", "holiday", "workingday", 
            "weather", "temp", "temp_squared", "atemp", "humidity", 
            "windspeed", "house", "senate", "sporting_event", "session_any",
            "scaled_hour", "scaled_dayofweek", "scaled_season", "scaled_weather", 
@@ -90,19 +98,6 @@ biketrain.df <- bikeplot.df[keeps]
 # biketrain.df$weather[biketrain.df$weather =="4"] <- "3"
 # biketrain.df$weather <- as.factor(biketrain.df$weather)
 
-
-
-
-# -- Declare some variables --------------------------------------
-boxplot.binary.colors <- c("#E69F00", "#56B4E9")
-seasons <- c("Spring", "Summer", "Fall", "Winter")
-days.of.week <- c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
-weather.colors <- c("blue", "orange", "red", "black") # color per level of weather
-# - weather: (categorical)
-# - 1: Clear, Few clouds, Partly cloudy, Partly cloudy
-# - 2: Mist + Cloudy, Mist + Broken clouds, Mist + Few clouds, Mist
-# - 3: Light Snow, Light Rain + Thunderstorm + Scattered clouds, Light Rain + Scattered clouds
-# - 4: Heavy Rain + Ice Pallets + Thunderstorm + Mist, Snow + Fog
 
 
 # -------------- Data shape & summary ----------------------------
@@ -125,7 +120,7 @@ describe(as.factor(bikeall.df$humidity))
 glimpse(bikeall.df)
 
 
-# --------- Models ----------------------------
+# ++ Models ----------------------------
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 # randomly generate training and validation sets
@@ -165,6 +160,115 @@ summary(bike.lm)
 
 
 
+# -- GAM regression. Single variable: temp -------------
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#          ME       RMSE  MAE     MPE     MAPE
+# Test set 0.753854 166.9 127.19 -562.358 593.125
+bike.gam <- gam(count ~ s(temp), data = training.df)
+# predict training data and check accuracy
+gam.train.pred <- predict(bike.gam, na.action = na.pass)
+results <- data.frame(prediction = gam.train.pred, actual = training.df$count)
+accuracy(results$prediction, results$actual)
+
+# predict validation data and check accuracy
+gam.valid.pred <- predict(bike.gam, newdata = validation.df, na.action = na.pass)
+results <- data.frame(prediction = gam.valid.pred, actual = validation.df$count)
+accuracy(results$prediction, results$actual)
+
+ggplot(bikeplot.df, aes(temp, count)) +
+  geom_point() +
+  stat_smooth(method = gam, formula = y ~ s(x))
+
+
+# -- GAM regression. Single variable: atemp -------------
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#          ME       RMSE    MAE     MPE     MAPE
+# Test set 0.761806 167.791 127.629 -570.92 601.669
+bike.gam <- gam(count ~ s(atemp), data = training.df)
+# predict training data and check accuracy
+gam.train.pred <- predict(bike.gam, na.action = na.pass)
+results <- data.frame(prediction = gam.train.pred, actual = training.df$count)
+accuracy(results$prediction, results$actual)
+
+# predict validation data and check accuracy
+gam.valid.pred <- predict(bike.gam, newdata = validation.df, na.action = na.pass)
+results <- data.frame(prediction = gam.valid.pred, actual = validation.df$count)
+accuracy(results$prediction, results$actual)
+
+
+
+# -- GAM regression. Single variable: humidity -------------
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#          ME       RMSE    MAE     MPE     MAPE
+# Test set 0.477493 172.521 132.255 -650.922 681.644
+bike.gam <- gam(count ~ s(humidity), data = training.df)
+# predict training data and check accuracy
+gam.train.pred <- predict(bike.gam, na.action = na.pass)
+results <- data.frame(prediction = gam.train.pred, actual = training.df$count)
+accuracy(results$prediction, results$actual)
+
+# predict validation data and check accuracy
+gam.valid.pred <- predict(bike.gam, newdata = validation.df, na.action = na.pass)
+results <- data.frame(prediction = gam.valid.pred, actual = validation.df$count)
+accuracy(results$prediction, results$actual)
+
+
+# require(xts)
+# 
+# time_index <- seq(from = as.POSIXct("2011-01-01 00:00"),
+#                   to = as.POSIXct("2012-12-31 23:00"), by = "hour")
+# set.seed(1)
+# value <- rnorm(n = length(time_index))
+# eventdata <- xts(value, order.by = time_index)
+# ets(eventdata)
+##
+
+#  generate the naive and seasonal naive forecasts
+# naive.pred <- naive(train.ts, h = nValid)
+# snaive.pred <- snaive(train.ts, h = nValid)
+
+
+
+# -- LM regression. Single variable: temp ---------------
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#          ME       RMSE    MAE     MPE     MAPE
+# Test set 0.761806 167.791 127.629 -570.92 601.669
+temp.lm <- lm(count ~ temp, data = training.df)
+
+# predict training data and check accuracy
+temp.lm.train.pred <- predict(temp.lm, na.action = na.pass)
+results <- data.frame(prediction = temp.lm.train.pred, actual = training.df$count)
+accuracy(results$prediction, results$actual)
+
+# predict validation data and check accuracy
+temp.lm.valid.pred <- predict(temp.lm, newdata = validation.df, na.action = na.pass)
+results <- data.frame(prediction = temp.lm.valid.pred, actual = validation.df$count)
+accuracy(results$prediction, results$actual)
+
+
+
+
+# -- LM regression. Single variable: humidity ---------------
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#          ME       RMSE    MAE     MPE     MAPE
+# Test set 0.642001 173.744 133.348 -666.854 697.702
+humidity.lm <- lm(count ~ humidity, data = training.df)
+
+# predict training data and check accuracy
+humidity.lm.train.pred <- predict(humidity.lm, na.action = na.pass)
+results <- data.frame(prediction = humidity.lm.train.pred, actual = training.df$count)
+accuracy(results$prediction, results$actual)
+
+# predict validation data and check accuracy
+humidity.lm.valid.pred <- predict(humidity.lm, newdata = validation.df, na.action = na.pass)
+results <- data.frame(prediction = humidity.lm.valid.pred, actual = validation.df$count)
+accuracy(results$prediction, results$actual)
+
+
+
+
+
+
 
 # -- linear regression with stepwise variable selection ----------------------------
 # Throw everything at it.
@@ -187,14 +291,15 @@ hist(residuals, breaks = 50, xlab = "residual (predicted - actual)")
 
 
 
-# +++ Regression tree  --------------------
+
+
+
+
+# Regression tree  --------------------
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 # courtesy of tutorial: http://uc-r.github.io/regression_trees
 
 # performing regression trees
-library(rpart)
-library(rpart.plot)
-
 m1 <- rpart(
   formula = count ~ .,
   data = training.df,
@@ -329,7 +434,6 @@ scaled_train.df <- nn_data.df[ss==1,]
 scaled_valid.df <- nn_data.df[ss==2,]
 
 
-library(neuralnet)
 # nn <- neuralnet(count ~ hour + dayofweek + temp_squared + humidity + windspeed,
 #                   +                 data = scaled_train.df, hidden = c(4, 2), rep = 3,
 #                   +                 linear.output = TRUE)
@@ -345,7 +449,7 @@ library(neuralnet)
 
 # Bog-standard neural network
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-# ME     RMSE      MAE  MPE MAPE
+#          ME        RMSE    MAE    MPE       MAPE
 # Test set -0.573257 151.378 111.414 -342.524 369.05 (de-scaled)
 # RMSLE: 0.99700
 nn <- neuralnet(count ~ scaled_hour + scaled_dayofweek + scaled_temp + 
@@ -408,14 +512,14 @@ write.csv(nn.competition.results, file = "output/nn_binaries.csv", row.names=FAL
 
 
 
-# +++ Regression tree: Scaled data  --------------
+# Regression tree: Scaled data  --------------
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 #          ME       RMSE     MAE      MPE    MAPE
 # Test set 0.123124 105.127 74.08 -141.174 165.475
 # RMSLE of submitted data: 0.90795
 
-library(rpart)
-library(rpart.plot)
+# ALL IN !!!!!!!
+scaled_train.df <- nn_data.df
 
 # performing regression trees
 scaled_tree_1 <- rpart(
@@ -435,13 +539,13 @@ scaled_tree_2 <- rpart(
 )
 
 plotcp(scaled_tree_2) # Maximum size/depth looks way higher here.
-abline(v = 55, lty = "dashed")
-abline(v = 65, lty = "dashed")
+abline(v = 70, lty = "dashed")
+abline(v = 80, lty = "dashed")
 
 # perform a grid search
 hyper_grid <- expand.grid(
   minsplit = seq(5, 20, 1),
-  maxdepth = seq(60, 70, 1)
+  maxdepth = seq(80, 90, 1)
 )
 
 # iterate through each minsplit and maxdepth combination.
@@ -520,49 +624,81 @@ prp(scaled_optimal_tree)
 # Test set 0.743597 168.015 127.788 -569.081 599.818
 
 
-# Just scale the predictors.
-# scaled_lm_data.df <- subset(biketrain.df, select = c("temp"))
-scaled_lm_data.df <- subset(biketrain.df, select = c("humidity", "temp", "hour", "dayofweek"))
-scaled_lm_biketest_data.df <- subset(biketest.df, select = c("humidity", "temp", "hour", "dayofweek"))
-maxs <- apply(scaled_lm_data.df, 2, max)
-mins <- apply(scaled_lm_data.df, 2, min)
-scaled_lm_data.df <- as.data.frame(scale(scaled_lm_data.df, center = mins, scale = maxs - mins))
-scaled_lm_biketest_data.df <- as.data.frame(scale(scaled_lm_biketest_data.df, center = mins, scale = maxs - mins))
+offhours.training.df <- subset(training.df, hour < 9 | hour > 20)
+offhours.validation.df <- subset(validation.df, hour < 9 | hour > 20)
+dayhours.training.df <- subset(training.df, hour < 21 & hour > 8)
+dayhours.validation.df <- subset(validation.df, hour < 21 & hour > 8)
 
-# Add count back in
-# scaled_lm_data.df <- data.frame(count = biketrain.df$count, scaled_lm_data.df$temp)
-scaled_lm_data.df <- data.frame(count = biketrain.df$count, scaled_lm_data.df)
 
-# Split out train and valid data
-scaled_lm_train.df <- scaled_lm_data.df[ss==1,]
-scaled_lm_valid.df <- scaled_lm_data.df[ss==2,]
 
-scaled.lm <- lm(count ~ ., data = scaled_lm_train.df, na.action = na.exclude)
+# When I split into daytime and off hours, I got RMSLE of 1.24144
+# try with just daytime hours
+scaled.day.lm <- lm(count ~ scaled_atemp, data = dayhours.training.df, na.action = na.exclude)
+scaled.lm.train.pred <- predict(scaled.day.lm, na.action = na.pass)
+accuracy(scaled.lm.train.pred, dayhours.training.df$count)
+
+scaled.lm.valid.pred <- predict(scaled.day.lm, newdata = dayhours.validation.df, na.action = na.pass)
+accuracy(scaled.lm.valid.pred, dayhours.validation.df$count)
+
+# try with just off hours
+scaled.off.lm <- lm(count ~ scaled_atemp, data = offhours.training.df, na.action = na.exclude)
+scaled.lm.train.pred <- predict(scaled.off.lm, na.action = na.pass)
+accuracy(scaled.lm.train.pred, offhours.training.df$count)
+
+scaled.lm.valid.pred <- predict(scaled.off.lm, newdata = offhours.validation.df, na.action = na.pass)
+accuracy(scaled.lm.valid.pred, offhours.validation.df$count)
+
+
+
+# All hours
+scaled.lm <- lm(count ~ scaled_atemp, data = training.df, na.action = na.exclude)
 scaled.lm.train.pred <- predict(scaled.lm, na.action = na.pass)
-accuracy(scaled.lm.train.pred, scaled_lm_train.df$count)
+accuracy(scaled.lm.train.pred, training.df$count)
+
 
 # predict validation data
-scaled.lm.valid.pred <- predict(scaled.lm, newdata = scaled_lm_valid.df, na.action = na.pass)
-accuracy(scaled.lm.valid.pred, scaled_lm_valid.df$count)
+scaled.lm.valid.pred <- predict(scaled.lm, newdata = validation.df, na.action = na.pass)
+accuracy(scaled.lm.valid.pred, validation.df$count)
 
 # -- Predict from competition data. Remove negatives and write to CSV ------------------------------------
 
-## Predictions with test/competition data.
-scaled.lm.test.pred <- predict(scaled.lm, newdata = scaled_lm_biketest_data.df, na.action = na.pass)
+dayhours.test.df <- subset(biketest.df, hour < 21 & hour > 8)
+offhours.test.df <- subset(biketest.df, hour < 9 | hour > 20)
 
-# convert negative values to 0
-scaled.lm.test.pred[scaled.lm.test.pred < 0] <- 0
+
+## Predictions with test/competition data.
+scaled.lm.day.test.pred <- predict(scaled.day.lm, newdata = dayhours.test.df, na.action = na.pass)
+scaled.lm.off.test.pred <- predict(scaled.off.lm, newdata = offhours.test.df, na.action = na.pass)
+
+day.df <- data.frame(datetime = dayhours.test.df$datetime, count = scaled.lm.day.test.pred)
+off.df <- data.frame(datetime = offhours.test.df$datetime, count = scaled.lm.off.test.pred)
+
+scaled.dayoff.pred.df <- rbind(day.df, off.df)
+scaled.dayoff.pred.df <- scaled.dayoff.pred.df[order(scaled.dayoff.pred.df$datetime),]
+
 
 # write submission in kaggle format
 # datetime,count
 # 2011-01-20 00:00:00,0
-write.csv(data.frame(datetime = biketest.df$datetime, count = pred_test),
-          file = "output/regression_tree_optimal.csv", row.names=FALSE)
+write.csv(scaled.dayoff.pred.df, file = "output/scaled_lm_day_vs_offhours.csv", row.names=FALSE)
 
 
 
 
-# -------------- Plots -----------------------------------
+# ++ Plots -----------------------------------
+
+# Declare some variables
+boxplot.binary.colors <- c("#E69F00", "#56B4E9")
+seasons <- c("Spring", "Summer", "Fall", "Winter")
+days.of.week <- c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+weather.colors <- c("blue", "orange", "red", "black") # color per level of weather
+# - weather: (categorical)
+# - 1: Clear, Few clouds, Partly cloudy, Partly cloudy
+# - 2: Mist + Cloudy, Mist + Broken clouds, Mist + Few clouds, Mist
+# - 3: Light Snow, Light Rain + Thunderstorm + Scattered clouds, Light Rain + Scattered clouds
+# - 4: Heavy Rain + Ice Pallets + Thunderstorm + Mist, Snow + Fog
+
+
 
 
 # Leadoff Graphic: Histogram of count ----------------------
@@ -571,7 +707,8 @@ ggplot() + geom_histogram(data = bikeplot.df, aes(x = count), color = "black",
   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
   labs(x = "count (hourly usage count)", y = "Frequency", title = "Histogram of hourly count (usage)") +
   geom_vline(aes(xintercept = median(bikeplot.df$count), colour = "median")) + 
-  geom_vline(aes(xintercept = mean(bikeplot.df$count), colour = "mean"))
+  geom_vline(aes(xintercept = mean(bikeplot.df$count), colour = "mean")) +
+  geom_vline(aes(xintercept = quantile(bikeplot.df$count, .90), color = "90%"))
 
 
 
@@ -599,7 +736,9 @@ dayofweek.bar
 # hour trend line data 
 median.hourly.count <- aggregate(bikeplot.df$count, by = list(bikeplot.df$hour), FUN = median)
 names(median.hourly.count) <- c("hour", "mediancount")
-
+# median.weekday.hourly.count <- subset(bikeplot.df, workingday == 0, select = c("hour", "count"))
+# median.weekday.hourly.count <- aggregate(median.weekday.hourly.count,
+#                                          by = list(median.weekday.hourly.count$hour), FUN = median)
 
 # Tile plot : Count: hour x day -------------------
 hour.tile.data <- group_by(bikeplot.df, hour, dayofweek)
@@ -638,12 +777,13 @@ hour.scatter2 <- ggplot() +
   # scatter plot
   geom_point(data = bikeplot.df, aes(x = jitter(hour, 2), y = count, colour = bikeplot.df$workingday), 
              pch = 16, alpha = 0.3) + 
-  # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) + 
+  scale_y_sqrt() + 
   scale_color_manual(values=workingday.colors) + 
   labs(title = "count by hour w/ median trendline", subtitle = "color: workingday",
        x = "Hour of Day (00-23)", y = "Count", color = "workingday") +
   # line plot : median.hourly.count
   geom_line(data = median.hourly.count, aes(x = hour, y = mediancount), size = 1, color = "grey25") +
+  # geom_line(data = median.weekday.hourly.count, aes(x = hour, y = count), size = 1) +
   theme(legend.position="top")
   # geom_smooth(data = median.hourly.count, aes(x = hour, y = mediancount), method = "auto")
 
@@ -670,7 +810,6 @@ ggplot(bikeplot.df) + geom_point(aes(x = jitter(as.numeric(dayofweek), 2), y = c
 
 # Temperature (atemp & temp) ----------------------------
 # Count rarely low when temp is high 
-# <<<<<<< VERY GOOD COLORS. Plan vs Log shows heavy use at 31º <<<<<<<<<<<<<<<<<<<<<<<<
 # - temp: (double) Celsius
 # - atemp: (double) "feels like" in Celsius
 
@@ -680,14 +819,26 @@ median.atemp.count <- aggregate(bikeplot.df$count, by = list(bikeplot.df$atemp),
 names(median.temp.count) <- c("temp", "mediancount")
 names(median.atemp.count) <- c("atemp", "mediancount")
 
+
+
+temp.histo.data <- data.frame(atemp = as.factor(bikeplot.df$atemp), 
+                              temp = as.factor(bikeplot.df$temp))
+ggplot(data = temp.histo.data, aes(x = temp)) +
+  geom_bar() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+
+
 # Scatter Plots: Count by Temperature with median usage trendline
 # atemp
 atemp.scatter <- ggplot() + 
   geom_point(data = bikeplot.df, 
              aes(x = jitter(bikeplot.df$atemp, 2), y = count),
              pch = 16, colour = "orange", alpha = 0.3) +
-  scale_y_sqrt() +
-  # geom_line(data = median.atemp.count, aes(x = atemp, y = mediancount), size = 1, color = "grey28") +
+  # scale_y_sqrt() +
+  # scale_y_log10() +
+  geom_line(data = median.atemp.count, aes(x = atemp, y = mediancount), size = 1, color = "grey28") +
   geom_smooth(data = median.atemp.count, 
               aes(x = atemp, y = mediancount, color = mediancount), 
               method = "auto") +
@@ -696,13 +847,18 @@ atemp.scatter <- ggplot() +
 atemp.scatter
 
 # temp
-temp.scatter <- ggplot() + geom_point(data = bikeplot.df, aes(x = jitter(bikeplot.df$temp, 2), y = count),
+temp.scatter <- ggplot() + 
+  geom_point(data = bikeplot.df, aes(x = jitter(bikeplot.df$temp, 2), y = count),
                                   pch = 16, colour = "salmon", alpha = 0.3) +
   labs(x = "temp", y = "Count", title = "Count by temp (ºC) - w/ median trend") + 
   # scale_y_log10(breaks = c(5, 25, 100, 250, 500, 1000, 1500)) +
-  scale_y_sqrt() +
-  # geom_line(data = median.temp.count, aes(x = temp, y = mediancount), size = 1, color = "grey28") +
-  geom_smooth(data = median.temp.count, aes(x = temp, y = mediancount))
+  # scale_y_sqrt() +
+  geom_line(data = median.temp.count, aes(x = temp, y = mediancount), size = 1, color = "grey28") +
+  geom_smooth(data = median.temp.count, aes(x = temp, y = mediancount)) +
+  stat_smooth(data = bikeplot.df, aes(x = temp, y = count), color = "red", method = gam, formula = y ~ s(x)) +
+  stat_smooth(data = bikeplot.df, aes(x = temp, y = count), color = "green", method = lm, formula = y ~ x)
+
+temp.scatter
   
 # Median temp by hour of day: Line Plot
 data.for.plot <- aggregate(bikeplot.df$temp, by = list(bikeplot.df$hour), FUN = median)
@@ -736,7 +892,11 @@ humidity.weather.scatter <- ggplot() +
        x = "Humidity", y = "Count", color = "weather") +
   # line plot : median.humidity.count
   # geom_line(data = median.humidity.count, aes(x = humidity, y = mediancount), size = 1, color = "grey28") +
-  geom_smooth(data = median.humidity.count, aes(x = humidity, y = mediancount), color = "grey28")
+  geom_smooth(data = median.humidity.count, aes(x = humidity, y = mediancount), color = "grey28") +
+  stat_smooth(data = bikeplot.df, aes(x = humidity, y = count), color = "red", method = gam, formula = y ~ s(x)) +
+  stat_smooth(data = bikeplot.df, aes(x = humidity, y = count), color = "green", method = lm, formula = y ~ x)
+
+
 humidity.weather.scatter
 
 
