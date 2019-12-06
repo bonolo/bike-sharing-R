@@ -7,7 +7,7 @@ This project is a prediction/forecasting exercise which used a combination of mo
 
 This was a time series forecasting problem, but I was unable to treat it as such because...
 - There were gaps in the data and I did not understand the explanations I read about imputing time series values. With more time, I may have figured it out.
-- This course did not cover forecasting.
+- This course only touched upon forecasting.
 
 I chose to hunt down additional data to combine with the Kaggle dataset's predictor variables. My reasoning was...
 1. The Kaggle data was already very clean. By hunting for my own data, I got a chance to do a bit of ETL, cleaning, etc.
@@ -15,7 +15,7 @@ I chose to hunt down additional data to combine with the Kaggle dataset's predic
 1. I have no experience with this sort of modeling, so I thought I might improve my results by using data which others had not.
 1. It would show some original work on my own part.
 
-The archive of public scores for this Kaggle competition shows an RMSLE range from 0.33756 to 23.38876 (excluding the single highest and lowest outliers) across a total of 12,967 entries. My best model had an RMSLE of 0.89715 and would be at 10,016th place.
+The archive of public scores for this Kaggle competition shows an RMSLE range from 0.33756 to 23.38876 (excluding the single highest and lowest outliers) across a total of 12,967 entries. My best model had an RMSLE of 0.89011 and would be put me in a tie for 9,985th place.
 
 ## 2. Business problem/opportunity (from proposal)
 
@@ -90,14 +90,24 @@ Variables...
     session_count      integer   # of universities in session
     session_any        binary    any universities in session?
 
-#### 4.b.3. Pro sports schedules (DC-area home games)
+#### 4.b.3. Sunrise/sunset -> binary `is_daylight` variable
+
+Cycling is much more dangerous at night, so I found a 2011 sunrise/sunset calendar for the Washington, DC area at <https://www.sunearthtools.com/solar/sunrise-sunset-calendar.php>. Used Excel to create CSVs and loaded them into a MySQL table:
+
+    +---------+------+
+    | Date    | date |
+    | Sunrise | time |
+    | Sunset  | time |
+    +---------+------+
+
+I used SQL to combine this will the Kaggle data and create a calculated binary `is_daylight` value for each observation.
+
+#### 4.b.4. Pro sports schedules (DC-area home games)
 
 Who drives to a pro sporting event? So, I captured (in CSV files) time windows for professional sporting events held within the geographic footprint of the bike share service. I excluded the Washington Redskins because they play in Landover, Maryland... outside the bike sharing service area.
 
 Formats varied greatly. Once the CSVs were in MySQL, I massaged and joined them into a common table.
 
-    +-----------+----------+
-    | Field     | Type     |
     +-----------+----------+
     | datetime  | datetime | To join with the Kaggle hourly time data.
     | capitals  | boolean  | Is there a game at this time?
@@ -108,7 +118,7 @@ Formats varied greatly. Once the CSVs were in MySQL, I massaged and joined them 
 
 Using start times from the CSV files + typical game lengths, I used SQL to set the binary flag to TRUE for hours during which games were being held, along with a bit of buffer on either side for travel to and from the games. I excluded away games for all.
 
-##### 4.b.3.1. Washington Capitals (NHL) [capitals-schedule-2011.csv]
+##### 4.b.4.1. Washington Capitals (NHL) [capitals-schedule-2011.csv]
 
 Gathered from: <https://www.nhl.com/capitals/news/capitals-announce-composite-2010-11-television-schedule/c-537574> and <https://www.hockey-reference.com/teams/WSH/2012_games.html>
 
@@ -117,7 +127,7 @@ Gathered from: <https://www.nhl.com/capitals/news/capitals-announce-composite-20
     caps_time   (HH:mm:ss)
 
 
-##### 4.b.3.2. Washington Nationals (MLB) [nationals-schedule-2011.csv]
+##### 4.b.4.2. Washington Nationals (MLB) [nationals-schedule-2011.csv]
 
 Gathered from: <https://www.retrosheet.org/schedule/>
 
@@ -130,19 +140,20 @@ I replaced `Nationals_Game_Time` strings ("D" or "N") with typical game times.
 - N (Night) ~19:05
 
 
-##### 4.b.3.3. Washington Wizards (NBA) [washington-wizards-2011-schedule.csv]
+##### 4.b.4.3. Washington Wizards (NBA) [washington-wizards-2011-schedule.csv]
 
 Gathered from: <https://www.basketball-reference.com/teams/WAS/2012_games.html>.
 
     start_ET      time (HH:mm:ss)
     Date_iso      iso date
 
-##### 4.b.3.4. DC United (MLS) [dc_united-2011-schedule.csv]
+##### 4.b.4.4. DC United (MLS) [dc_united-2011-schedule.csv]
 
 Gathered from: <https://en.wikipedia.org/wiki/2011_D.C._United_season>
 
     DC_United_Game_date      iso date
     time_ET                  time (HH:mm:ss)
+
 
 
 
@@ -163,6 +174,8 @@ The data was clean. The only missing values were the counts in the test data set
 - mean: 191
 - distribution: heavily right-tailed; peaks at far left (count = 1 to 5)
 
+While examining the data, I noticed the distribution of `count` is quite different between day/night or peak/offpeak. I even used this to build a split model.
+
 ![Histogram of count](plots/count-histogram.png "Histogram of count")
 
 ### `datetime`, `hour`, `dayofweek`, and `month`
@@ -171,19 +184,19 @@ Kaggle provided `datetime`, an hourly timestamp. I extracted `hour`, `dayofweek`
 
 There are significant `count` peaks at 08:00 and 17:00 - 18:00 (presumably for rush hour).
 
-Total `count` varied little by day of week. I dug deeper and discovered that timing of `count` did vary by day. My scatterplot and heatmap show weekend `count` has two different daily peaks which are broader and less distinct: 23:00 - 00:00 and 10:00 to 15:00 (possibly because people are cycling home from late night events and getting up late the next day).
+Total `count` varied little by day of week. I dug deeper and discovered that timing of `count` did vary by day. My scatterplot and heatmap show very different patterns of `count` for weekends vs. weekdays.
 
 ![Count by hour and dayofweek](plots/dayofweek-bar+hour-scatter.png "Count by hour and dayofweek")
 
-### `holiday`
+### `holiday` and `is_daylight`
 
-I tried several ways to examine the `holiday` variable, all of which showed little `count` difference for `holiday` vs. non-holiday (though holidays lacked the huge outliers found on other days).
+The `holiday` variable seemed a poor predictor. Unsurprisingly, usage tends to be much higher in daylight, though there are very high `count` outliers when `is_daylight` == 0.
 
-![Boxplot: Holiday](plots/holiday-boxplot.png "Boxplot: Holiday")
+![Boxplot: Holiday & is_daylight](plots/holiday+is_daylight-boxplot.png "Boxplot: Holiday & is_daylight")
 
 ### `weather` and `season`
 
-`weather` and `season` seemed to influence demand. However, spring = 1 `count` was much lower than other seasons. Perhaps the service launched that spring.
+`weather` and `season` seemed to influence demand. However, `count` was much lower in spring than other seasons. Perhaps the service launched that spring, or DC gets terrible weather in spring (snow, etc).
 
 Weather had 4 categorical values, but weather = 4 only appeared in three observations (among 10,000+ records). This caused problems in modeling because the value would sometimes only appear in validation, but not training.
 
@@ -202,7 +215,7 @@ My observations about temperature (both `atemp` and `temp`) were
 
 `humidity` did not correlate to `atemp` or `atemp - temp`, as I expected. However...
 - `count` drops as `humidity` rises beyond ~28.
-- `humidity` is rarely < 25, but generally only 13:00 - 17:00 (peak usage time).
+- `humidity` is rarely < 25, and then generally only 13:00 - 17:00 (weekend high usage time).
 - `weather` correlates strongly with `humidity`. As `humidity` rises, `weather` gets worse.
 - `humidity` does not correlate with peaks in usage by hour.
 
@@ -219,7 +232,7 @@ My observations about temperature (both `atemp` and `temp`) were
 
 When the `house` and `senate` were in session, usage turned out to be lower. That may correlate with other variables, but I couldn't figure any out.
 
-![House Senate Boxplot](plots/count-congress-boxplots.png "House Senate Boxplot")
+![House Senate Boxplot](plots/congress-boxplots.png "House Senate Boxplot")
 
 ### Sporting events
 
@@ -241,7 +254,7 @@ Universities all tended to be in or out of session at the same time (as seen in 
 
 Related files:
 
-    bike-sharing.R
+    bike-sharing-setup.R
     create+select.sql
 
 ### 6.a. Repairs
@@ -281,6 +294,7 @@ I derived the following variables from existing data...
 - `hour` derived from built-in `datetime` hourly time stamp. (MySQL `HOUR()` function)
 - `dayofweek` derived from built-in `datetime` hourly time stamp. (MySQL `DAYOFWEEK()` function)
 - `month` derived from built-in `datetime` hourly time stamp. (MySQL `DAYOFWEEK()` function)
+- `is_daylight`, calculated by comparing datetime field to daily sunrise/sunset values.
 
 I derived additional records for hours when people would be traveling to, attending, or traveling away from home games of 4 teams. I used SQL to `SELECT` start times for pro sporting events and then `INSERT` new records for the additional time periods. (`INSERT INTO... SELECT`)
 
@@ -310,30 +324,35 @@ I couldn't think of any reasons to cluster the data, given my assumption that re
 
 Related files...
 
-    bike-sharing.R        (R code)
+    bike-sharing-models.R        (R code)
 
-Models & final RMSLE
+### Models & final RMSLE (selective results)
 
-    Model                            | RMSLE
-    -------------------------------------------
-    Regression tree - scaled data    | 0.89715
-        all training, no validation  |
-    Regression tree - scaled data    | 0.90795
-    Neural network - numeric         | 0.99700
-    Neural network - numeric & binary| 0.99700
-    Regression tree - optimized      | 1.02692
-    Multiple Linear regression       | 1.28159
-    Multiple linear regression       | 1.64349
-        w/ stepwise selection        |
+These are only some of the models I created. Late in the project, I added two more variables (`month` and `is_daylight`) and re-tested. In many cases, these variables improved scores.
+
+                                                         | Orig     | With month & is_daylight
+    Model                                                | RMSLE    | RMSLE
+    ---------------------------------------------------------------------------
+    GAM + regression tree (partitioned day/off hours)    |          | 0.89011
+    Regression tree - scaled data, no validation         | 0.89715  | unchanged
+    Regression tree - scaled data                        | 0.90795  |
+    Regression tree - optimized                          | 1.02692  | 0.93428
+    Neural network - numeric  6 vars                     | 0.99700  | 0.99141
+    Linear regression: 1 scaled var, partition day/night | 1.24144  | 1.68000
+    Multiple linear regression w/ stepwise selection     | 1.64349  | 1.26428
+    Neural network - numeric & binary                    | 1.58455  | 1.26794
+    Multiple Linear regression                           | 1.28159  |
 
 
 ### Data used at modeling stage
 
     > str(biketrain.df)
-    'data.frame':	10886 obs. of  26 variables:
+    'data.frame':	10886 obs. of  28 variables:
      $ count              : int  16 40 32 13 1 1 2 3 8 14 ...
      $ hour               : int  0 1 2 3 4 5 6 7 8 9 ...
      $ dayofweek          : Factor w/ 7 levels "1","2","3","4",..: 7 7 7 7 7 7 7 7 7 7 ...
+     $ month              : Factor w/ 12 levels "1","2","3","4",..: 1 1 1 1 1 1 1 1 1 1 ...
+     $ is_daylight        : Factor w/ 2 levels "0","1": 1 1 1 1 1 1 1 1 2 2 ...
      $ season             : Factor w/ 4 levels "1","2","3","4": 1 1 1 1 1 1 1 1 1 1 ...
      $ holiday            : Factor w/ 2 levels "0","1": 1 1 1 1 1 1 1 1 1 1 ...
      $ workingday         : Factor w/ 2 levels "0","1": 1 1 1 1 1 1 1 1 1 1 ...
@@ -349,6 +368,7 @@ Models & final RMSLE
      $ session_any        : Factor w/ 2 levels "0","1": 1 1 1 1 1 1 1 1 1 1 ...
      $ scaled_hour        : num  0 0.0435 0.087 0.1304 0.1739 ...
      $ scaled_dayofweek   : num  1 1 1 1 1 1 1 1 1 1 ...
+     $ scaled_month       : num  0 0 0 0 0 0 0 0 0 0 ...
      $ scaled_season      : num  0 0 0 0 0 0 0 0 0 0 ...
      $ scaled_weather     : num  0 0 0 0 0 ...
      $ scaled_temp        : num  0.224 0.204 0.204 0.224 0.224 ...
@@ -357,16 +377,17 @@ Models & final RMSLE
      $ scaled_humidity    : num  0.81 0.8 0.8 0.75 0.75 0.75 0.8 0.86 0.75 0.76 ...
      $ scaled_windspeed   : num  0 0 0 0 0 ...
 
-### Linear regression - General
+### Linear, polynomial, logarithmic regression - General
 
-This was fairly easy, so I tried a number of different combinations with lm(), glm(), gam(), etc.
+This was fairly easy, so I tried a number of different combinations with lm(), glm(), gam(), etc. I also tried using the polynomial and logarithmic options with lm(). My best model turned out to be one which split the data in two partitions: one for a generalized additive model (gam()) and the other for a regression tree.
+
+I created over a dozen regression models and only honed the ones which got the best RMSLE validation scores. I submitted scoring data sets to Kaggle for the most promising models.
 
 NB: Linear regression created many negative predictions. Negative numbers cause errors when trying to calculate RMSLE, so I chose to convert negative predictions to 0.
 
     data[data < 0] <- 0
 
 ### Multiple linear regression
-
 
 My first decent prediction was based on my 11 best-guess variables and used all defaults. I picked the variables based on my observations. I adapted code from the textbook to build the model. Interestingly, the best predictors were mostly my derived or added variables. None of my scaled variables were chosen.
 
@@ -394,10 +415,37 @@ My first decent prediction was based on my 11 best-guess variables and used all 
 
 ### Linear regression with stepwise variable selection
 
-These results surprsied me. The stepwise variable selection chose many of my derived or added variables, but the RMSLE was originally the worst of all models by far. Perhaps the model was over-fit. Even though this model performed poorly, I used the weights displayed by `summary()` to guide me when choosing variables for the neural networks and regression trees I built.
+These results surprised me. The stepwise variable selection chose many of my derived or added variables, but the RMSLE was originally the worst of all. Perhaps the model was over-fit. Even though this model performed poorly, I used the weights displayed by `summary()` to guide me when choosing variables for the neural networks and regression trees I built.
 
 Late in the project, after I had added a number of predictors (including `is_daylight` and `month`), the scored RMSLE went from 1.64349 to 1.26428.
 
+### Linear regression on partitioned data
+
+My visualizations showed distinctly different patterns of use between day and night. I decided to split my training and validation data by peak/offpeak hours (or using `is_daylight`). I originally built separate single-variable linear regression models for each and then split the test/scoring data to use with each model. This yielded better results than my multiple linear regression models.
+
+### Combination: GAM and Regression Tree (most accurate)
+
+Following my success with linear regression on partitioned data, I started testing different forms of regression and managed to get my RMSLE to ~ 0.6 for the peak hours using a general additive model (GAM). The offpeak hours had terrible results with these basic types of regression, so I trained an optimized regression tree on offpeak data. Combining the two models on my partitioned data yielded the best results.
+
+    Family: gaussian
+    Link function: identity
+
+    Formula:
+    count ~ s(atemp)
+
+    Parametric coefficients:
+                Estimate Std. Error t value            Pr(>|t|)
+    (Intercept)   281.66       2.08     136 <0.0000000000000002 ***
+
+    Approximate significance of smooth terms:
+              edf Ref.df   F             p-value
+    s(atemp) 8.33   8.85 176 <0.0000000000000002 ***
+
+    R-sq.(adj) =  0.221   Deviance explained = 22.2%
+    GCV =  23663  Scale est. = 23623     n = 5469
+
+![gam() peak hours](plots/gam-peak-hours.png "gam() peak hours")
+![rt offpeak](plots/night_optimal_tree.png "rt offpeak")
 
 ### Neural Network
 
@@ -420,7 +468,7 @@ When using only numeric predictors, I failed to make the neural network produce 
 
 I did create some neural networks with 2 hidden layers when I added some binary variables, but these models had the same results and RMSLE as the simpler, numeric-only models.
 
-### Regression tree
+### Regression tree - optimized
 
 The textbook was sparse on predicting continuous outcome variables with R, so I had to dig around the Internet for information on regression trees. I built this with heavy reliance on the following tutorial: <http://uc-r.github.io/regression_trees>
 
@@ -432,7 +480,7 @@ This tutorial explained how to
 
 The RMSLE for this model was decent, depending upon the random sample used to build the tree. (I didn't set a seed at first.) I was surprised that a regression tree performed roughly equal to the neural networks, for which I had great hope.
 
-### Regression Tree Using Scaled Data (Most accurate)
+### Regression Tree Using Scaled Data
 
 Since I had already scaled the data and my neural network performed about the same as the regression tree, I decided to train another optimized regression tree with the scaled values. Performance was better, even using fewer variables. This was a pleasant surprise. (I used the <http://uc-r.github.io/regression_trees> again for optimization.)
 
@@ -447,10 +495,12 @@ Once I thought a model was in decent working order, I submitted it to Kaggle. Un
 
 After building my first set of models, I went back and used scaled data in them, but results weren't much improved. In the end, I simply sorted my Kaggle submissions by RMSLE to see which had worked the best.
 
+Once I got the hang of linear, polynomial, multiple and GAM regression, I started to throw all sorts of variables into the mix. Most models faired poorly with one variable, but once I split into day/night hours, I got better results with combined models.
+
 
 ## 9. Conclusions and recommendations
 
-The biggest surprise from my analysis was how well my regression trees worked. They turned out to be the most accurate, though I had expected them to perform the worst.
+The biggest surprise from my analysis was how well my regression trees worked. They turned out to be fairly accurate, though I had expected them to perform the worst.
 
 Scaling data was useful and surprisingly easy. On a whim, I fed my scaled data into my regression tree code and got a big boost in accuracy.
 

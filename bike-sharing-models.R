@@ -64,8 +64,8 @@ validation.df = biketrain.df[ss==2,]
 
 # --- "Multiple linear regression". Adapted from textbook. My best-guess 10 variables. ----------
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-# RMSLE 1.31020 w/out humidity. ME 1.26723 RMSE 141.212
-# RMSLE 1.28159 with humidity. ME 0.516658 RMSE 144.158
+# RMSLE 1.31020 w/out humidity.
+# RMSLE 1.28159 with humidity.
 # LOTS of negative predictions to remove.
 
 vars_to_use <- c('count', 'hour', 'dayofweek', 'season', 'workingday', 'humidity', # weather, 
@@ -92,7 +92,7 @@ summary(bike.lm)
 
 
 
-# -- GAM regression. Single variable: temp -------------
+# -- Generalized additive model. Single variable: temp -------------
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 bike.gam <- gam(count ~ s(temp), data = training.df)
 # predict training data and check accuracy
@@ -110,7 +110,7 @@ gam.valid.pred <- negative_to_zero(gam.valid.pred)
 rmsle(validation.df$count, gam.valid.pred)
 
 
-# -- GAM regression. Single variable: atemp -------------
+# -- Generalized additive model. Single variable: atemp -------------
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 bike.gam <- gam(count ~ s(atemp), data = training.df)
 # predict training data and check accuracy
@@ -129,7 +129,7 @@ rmsle(validation.df$count, gam.valid.pred)
 
 
 
-# -- GAM regression. Single variable: humidity -------------
+# -- Generalized additive model. Single variable: humidity -------------
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 bike.gam <- gam(count ~ s(humidity), data = training.df)
 # predict training data and check accuracy
@@ -210,7 +210,7 @@ rmsle(validation.df$count, humidity.lm.valid.pred)
 # Scored RMSLE: 1.26428
 # An earlier version scored RMSLE = 1.64349 without is_daylight, month, scaled, etc.
 
-#### Table 6.6
+#### Table 6.6 from the textbook
 # use step() to run stepwise regression.
 # set directions = to either "backward", "forward", or "both"
 bike.lm <- lm(count ~ ., data = training.df, na.action = na.exclude)
@@ -236,6 +236,44 @@ predict_scoring_set(bike.step.lm, "output/lm_stepwise_selection.csv")
 
 # residuals <- bike.step.lm.pred - validation.df$count
 # hist(residuals, breaks = 50, xlab = "residual (predicted - actual)")
+
+
+# -- Polynomial regression -------------------------------
+# polynomial.temp.lm <- lm(data = training.df, count ~ poly(temp, 2, raw = TRUE))
+polynomial.temp.lm <- lm(data = training.df, count ~ poly(temp, 2, raw = TRUE))
+summary(polynomial.temp.lm)
+
+polynomial.pred <- predict(polynomial.temp.lm, training.df)
+
+# training: RMSLE 1.43911
+polynomial.pred <- negative_to_zero(polynomial.pred)
+rmsle(training.df$count, polynomial.pred)
+
+# predict validation data
+polynomial.valid.pred <- predict(polynomial.temp.lm, validation.df)
+
+# validation: RMSLE 1.42811
+polynomial.valid.pred <- negative_to_zero(polynomial.valid.pred)
+rmsle(validation.df$count, polynomial.valid.pred)
+
+
+# -- Log transformation regression -------------------------------
+log.temp.lm <- lm(data = training.df, count ~ log(temp))
+summary(log.temp.lm)
+
+log.temp.pred <- predict(log.temp.lm, training.df)
+
+# training: RMSLE 1.48783
+log.temp.pred <- negative_to_zero(log.temp.pred)
+rmsle(training.df$count, log.temp.pred)
+
+# predict validation data
+log.temp.valid.pred <- predict(log.temp.lm, validation.df)
+
+# validation: RMSLE 1.47595
+log.temp.valid.pred <- negative_to_zero(log.temp.valid.pred)
+rmsle(validation.df$count, log.temp.valid.pred)
+
 
 
 
@@ -320,7 +358,8 @@ hyper_grid %>%
 
 # -- Create Optimal tree ------------------
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-# RMSLE of submitted data: 1.02692. ME: -2.11708 RMSE: 92.3636
+# RMSLE: 0.93428
+# An earlier version scored RMSLE = 1.02692 without is_daylight, month, scaled, etc.
 optimal_tree <- rpart(
   formula = count ~ .,
   data = rt_train.df,
@@ -328,26 +367,16 @@ optimal_tree <- rpart(
   control = list(minsplit = 16, maxdepth = 71, cp = 0.01)
 )
 
-
-
-
 rt.optimal.pred <- predict(optimal_tree, newdata = validation.df)
-# forecast::accuracy(rt.optimal.pred, validation.df$count)
-# validation: RMSLE 0.864251
 rmsle(validation.df$count, rt.optimal.pred)
-
 
 rpart.plot(optimal_tree)
 
-
-# -- Predict from competition data. Remove negatives and write to CSV ------------------------------------
-# RMSLE: 0.93428
-# An earlier version scored RMSLE = 1.02692 without is_daylight, month, scaled, etc.
+# -- Predict from competition data. Remove negatives and write to CSV -------------------
 
 ## Predictions with test/competition data.
 # rt.optimal.pred <- predict(optimal_tree, newdata = biketest.df, na.action = na.pass)
 predict_scoring_set(optimal_tree, "output/regression_tree_optimal.csv")
-
 
 # write submission in kaggle format
 # datetime,count
@@ -422,22 +451,22 @@ plot(nn)
 
 # Predict validation data set
 nn.pred <- compute(nn, scaled_valid.df)
-# validation: RMSLE 0.943666
+# validation: RMSLE 0.943854
 rmsle(scaled_valid.df$count, nn.pred$net.result)
 
 
 # NN prediction from competition data.
-nn.test.pred <- compute(nn, biketest.df)
-nn.competition.results <- data.frame(datetime = biketest.df$datetime, count = nn.test.pred$net.result)
-
+# nn.test.pred <- compute(nn, biketest.df)
+# nn.competition.results <- data.frame(datetime = biketest.df$datetime, count = nn.test.pred$net.result)
 predict_scoring_set(nn, "output/nn_defaults_6_variables.csv")
 
 
 
 # Try again, with some more variables.
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-# RMSLE of submitted data: 0.99700
-nn_binaries <- neuralnet(count ~ scaled_hour + scaled_dayofweek + scaled_temp + 
+# RMSLE: 1.26794
+# Withough scaled month, this goes down to 1.58455
+nn_binaries <- neuralnet(count ~ scaled_hour + scaled_dayofweek + scaled_temp + # scaled_month +
                            scaled_humidity + scaled_windspeed + scaled_season +
                            senate + house + session_any,
                          data = scaled_train.df, hidden = c(6, 3), rep = 3,
@@ -446,19 +475,19 @@ nn_binaries <- neuralnet(count ~ scaled_hour + scaled_dayofweek + scaled_temp +
 nn_binaries$result.matrix
 plot(nn_binaries)
 
+# Predict validation set
 nn_binaries.pred <- compute(nn_binaries, scaled_valid.df)
-results_nn_binaries <- data.frame(actual = scaled_valid.df$count, prediction = nn_binaries.pred$net.result)
-forecast::accuracy(results_nn_binaries$prediction, results$actual)
+# validation: RMSLE 1.55724
+rmsle(scaled_valid.df$count, nn_binaries.pred$net.result)
 
 # Prediction from competition data.
-# RMSLE of submitted data: 0.99700
 nn_binaries.test.pred <- compute(nn_binaries, nn_test.df)
 nn_binaries.competition.results <- data.frame(datetime = biketest.df$datetime, count = nn_binaries.test.pred$net.result)
 
 # write submission in kaggle format
 # datetime,count
 # 2011-01-20 00:00:00,0
-write.csv(nn.competition.results, file = "output/nn_binaries.csv", row.names=FALSE)
+write.csv(nn_binaries.competition.results, file = "output/nn_binaries_10.csv", row.names=FALSE)
 
 
 
@@ -554,8 +583,8 @@ rt.scaled.optimal.pred <- predict(scaled_optimal_tree, newdata = scaled_valid.df
 rmsle(scaled_valid.df$count, rt.scaled.optimal.pred)
 
 
-# -- Regression tree: scaled data - prediction from competition data. ------------------------------------
-# RMSLE of submitted data: 0.89715
+# -- Regression tree: scaled data - prediction from competition data. --------------
+# RMSLE of scored data: 0.89715
 rt.scaled.test.optimal.pred <- predict(scaled_optimal_tree, newdata = nn_test.df)
 # write submission in kaggle format
 # datetime,count
@@ -569,57 +598,196 @@ rpart.plot(scaled_optimal_tree)
 prp(scaled_optimal_tree)
 
 
+# ++ Split models. Partitioned by peak & offpeak -----------
+# or is_daylight 1, 0
+
+# Split into peak & offpeak
+offpeak.training.df <- subset(training.df, hour < 9 | hour > 20)
+offpeak.validation.df <- subset(validation.df, hour < 9 | hour > 20)
+peak.training.df <- subset(training.df, hour < 21 & hour > 8)
+peak.validation.df <- subset(validation.df, hour < 21 & hour > 8)
+
+# Use is_daylight to split
+# offpeak.training.df <- subset(training.df, is_daylight == 0)
+# offpeak.validation.df <- subset(validation.df, is_daylight == 0)
+# peak.training.df <- subset(training.df, is_daylight == 1)
+# peak.validation.df <- subset(validation.df, is_daylight == 1)
 
 
-# -- Linear regression. Single, scaled variable. Partition dayhours & offhours -----------
+# Partition biketest.df Scoring data set
+# peak.test.df <- subset(biketest.df, is_daylight == 0)
+# offpeak.test.df <- subset(biketest.df, is_daylight == 1)
+peak.test.df <- subset(biketest.df, hour < 21 & hour > 8)
+offpeak.test.df <- subset(biketest.df, hour < 9 | hour > 20)
+
+
+
+# -- Linear regression. Single, scaled variable. Partition peak & offpeak -----------
 # RMSLE 1.24144 (scored)
-
-offhours.training.df <- subset(training.df, hour < 9 | hour > 20)
-offhours.validation.df <- subset(validation.df, hour < 9 | hour > 20)
-dayhours.training.df <- subset(training.df, hour < 21 & hour > 8)
-dayhours.validation.df <- subset(validation.df, hour < 21 & hour > 8)
+# RMSLE 1.68000 (scored) using daylight instead of day/offpeak
 
 # try with just daytime hours
-scaled.day.lm <- lm(count ~ scaled_atemp, data = dayhours.training.df, na.action = na.exclude)
-scaled.lm.train.pred <- predict(scaled.day.lm, na.action = na.pass)
+scaled.day.lm <- lm(count ~ scaled_atemp, data = peak.training.df, na.action = na.exclude)
 
-scaled.lm.valid.pred <- predict(scaled.day.lm, newdata = dayhours.validation.df, na.action = na.pass)
+# stepwise selection version
+scaled.stepwise.day.lm <- lm(count ~., data = peak.training.df, na.action = na.exclude)
+scaled.stepwise.day.lm <- step(scaled.stepwise.day.lm, direction = "both")
+summary(scaled.stepwise.day.lm)
+
+# training
+scaled.day.lm.train.pred <- predict(scaled.day.lm, na.action = na.pass)
+# validation
+scaled.day.lm.valid.pred <- predict(scaled.day.lm, newdata = peak.validation.df, na.action = na.pass)
+scaled.stepwise.day.lm.valid.pred <- predict(scaled.stepwise.day.lm, newdata = peak.validation.df, na.action = na.pass)
+# is_daylight == 1 validation RMSLE: 0.814235
+# day/offpeak validation RMSLE: 0.602574
+# day/offpeak validation RMSLE: 0.593473 (GAM)
+# stepwise RMSLE: 0.733343
+rmsle(peak.validation.df$count, scaled.day.lm.valid.pred)
+# stepwise version
+scaled.stepwise.day.lm.valid.pred <- negative_to_zero(scaled.stepwise.day.lm.valid.pred)
+rmsle(peak.validation.df$count, scaled.stepwise.day.lm.valid.pred)
 
 # try with just off hours
-scaled.off.lm <- lm(count ~ scaled_atemp, data = offhours.training.df, na.action = na.exclude)
-scaled.lm.train.pred <- predict(scaled.off.lm, na.action = na.pass)
+scaled.offpeak.lm <- lm(count ~ scaled_atemp, data = offpeak.training.df, na.action = na.exclude)
 
-scaled.lm.valid.pred <- predict(scaled.off.lm, newdata = offhours.validation.df, na.action = na.pass)
 
-# All hours
-scaled.lm <- lm(count ~ scaled_atemp, data = training.df, na.action = na.exclude)
-scaled.lm.train.pred <- predict(scaled.lm, na.action = na.pass)
+# training
+scaled.offpeak.lm.train.pred <- predict(scaled.offpeak.lm, na.action = na.pass)
+# validation
+scaled.offpeak.lm.valid.pred <- predict(scaled.offpeak.lm, newdata = offpeak.validation.df, na.action = na.pass)
+# is_daylight == 0 validation RMSLE: 1.6016
+# day/offpeak validation RMSLE: 1.62375
+# day/offpeak validation RMSLE: 1.62431 (GAM)
+rmsle(offpeak.validation.df$count, scaled.offpeak.lm.valid.pred)
 
-# predict validation data
-scaled.lm.valid.pred <- predict(scaled.lm, newdata = validation.df, na.action = na.pass)
-forecast::accuracy(scaled.lm.valid.pred, validation.df$count)
+# Predict test/scoring dataset
+scaled.lm.day.test.pred <- predict(scaled.day.lm, newdata = peak.test.df, na.action = na.pass)
+scaled.lm.offpeak.test.pred <- predict(scaled.offpeak.lm, newdata = offpeak.test.df, na.action = na.pass)
 
-scaled.lm.valid.pred <- negative_to_zero(scaled.lm.valid.pred)
-rmsle(validation.df$count, scaled.lm.valid.pred)
+day.df <- data.frame(datetime = peak.test.df$datetime, count = scaled.lm.peak.test.pred)
+offpeak.df <- data.frame(datetime = offpeak.test.df$datetime, count = scaled.lm.offpeak.test.pred)
 
-# Predict from competition data.
-# partition biketest.df
-dayhours.test.df <- subset(biketest.df, hour < 21 & hour > 8)
-offhours.test.df <- subset(biketest.df, hour < 9 | hour > 20)
-
-## Predictions with test/competition data.
-scaled.lm.day.test.pred <- predict(scaled.day.lm, newdata = dayhours.test.df, na.action = na.pass)
-scaled.lm.off.test.pred <- predict(scaled.off.lm, newdata = offhours.test.df, na.action = na.pass)
-
-day.df <- data.frame(datetime = dayhours.test.df$datetime, count = scaled.lm.day.test.pred)
-off.df <- data.frame(datetime = offhours.test.df$datetime, count = scaled.lm.off.test.pred)
-
-scaled.dayoff.pred.df <- rbind(day.df, off.df)
-scaled.dayoff.pred.df <- scaled.dayoff.pred.df[order(scaled.dayoff.pred.df$datetime),]
+scaled.peakoffpeak.pred.df <- rbind(peak.df, offpeak.df)
+scaled.peakoffpeak.pred.df <- scaled.peakoffpeak.pred.df[order(scaled.peakoffpeak.pred.df$datetime),]
 
 
 # write submission in kaggle format
 # datetime,count
 # 2011-01-20 00:00:00,0
-write.csv(scaled.dayoff.pred.df, file = "output/scaled_lm_day_vs_offhours.csv", row.names=FALSE)
+write.csv(scaled.peakoffpeak.pred.df, file = "output/scaled_lm_peak_vs_offpeak.csv", row.names=FALSE)
+
+
+
+# -- Combined GAM and linear regression -----------
+# RMSLE: 0.89011
+
+# GAM for peak time
+scaled.peak.gam <- gam(count ~ s(atemp), data = peak.training.df)
+summary(scaled.peak.gam)
+
+# training
+scaled.peak.gam.train.pred <- predict(scaled.peak.gam, na.action = na.pass)
+# validation: RMSLE 0.593473
+scaled.peak.gam.valid.pred <- predict(scaled.peak.gam, newdata = peak.validation.df, na.action = na.pass)
+rmsle(peak.validation.df$count, scaled.peak.gam.valid.pred)
+
+
+# Regression tree: Just off hours / nighttime
+
+# performing regression trees
+night_tree <- rpart(
+  formula = count ~ .,
+  data = offpeak.training.df,
+  method = "anova"
+)
+
+rpart.plot(night_tree)
+plotcp(night_tree) # Maximum size/depth of tree = 8, or so it seems.
+
+night_tree_2 <- rpart(
+  formula = count ~ .,
+  data = offpeak.training.df,
+  method = "anova",
+  control = list(cp = 0, xval = 10)
+)
+
+plotcp(night_tree_2) # Maximum size/depth looks way higher here.
+abline(v = 20, lty = "dashed")
+abline(v = 30, lty = "dashed")
+
+# perform a grid search
+hyper_grid <- expand.grid(
+  minsplit = seq(5, 20, 1),
+  maxdepth = seq(25, 35, 1)
+)
+
+# iterate through each minsplit and maxdepth combination.
+# save each model into its own list item.
+models <- list()
+
+for (i in 1:nrow(hyper_grid)) {
+  # get minsplit, maxdepth values at row i
+  minsplit <- hyper_grid$minsplit[i]
+  maxdepth <- hyper_grid$maxdepth[i]
+  
+  # train a model and store in the list
+  models[[i]] <- rpart(
+    formula = count ~ .,
+    data = offpeak.training.df,
+    method = "anova",
+    control = list(minsplit = minsplit, maxdepth = maxdepth)
+  )
+}
+
+# function to get optimal cp
+get_cp <- function(x) {
+  min <- which.min(x$cptable[, "xerror"])
+  cp <- x$cptable[min, "CP"] 
+}
+
+# function to get minimum error
+get_min_error <- function(x) {
+  min <- which.min(x$cptable[, "xerror"])
+  xerror <- x$cptable[min, "xerror"] 
+}
+
+hyper_grid %>%
+  mutate(
+    cp    = purrr::map_dbl(models, get_cp),
+    error = purrr::map_dbl(models, get_min_error)
+  ) %>%
+  arrange(error) %>%
+  top_n(-5, wt = error)
+
+
+# -- Create Optimal tree ------------------
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+night_optimal_tree <- rpart(
+  formula = count ~ .,
+  data = offpeak.training.df,
+  method = "anova",
+  control = list(minsplit = 19, maxdepth = 29, cp = 0.01)
+)
+
+rpart.plot(night_optimal_tree)
+
+# Predict against validation data
+rt.night.optimal.pred <- predict(night_optimal_tree, newdata = offpeak.validation.df)
+# validation: RMSLE 1.07674
+rmsle(offpeak.validation.df$count, rt.night.optimal.pred)
+
+
+# GAM model - peak
+scaled.peak.gam.test.pred <- predict(scaled.peak.gam, newdata = peak.test.df, na.action = na.pass)
+scaled.peak.gam.test.pred <- negative_to_zero(scaled.peak.gam.test.pred)
+# Regression tree - offpeak
+rt.night.optimal.test.pred <- predict(night_optimal_tree, newdata = offpeak.test.df, na.actin = na.pass)
+
+gam.peak.df <- data.frame(datetime = peak.test.df$datetime, count = scaled.peak.gam.test.pred)
+rt.night.df <- data.frame(datetime = offpeak.test.df$datetime, count = rt.night.optimal.test.pred)
+mixed.models.df <- rbind(gam.peak.df, rt.night.df)
+write.csv(mixed.models.df, file = "output/gam+regression_tree.csv", row.names=FALSE)
+
+
 
