@@ -416,18 +416,31 @@ sports.df <- melt(sports.df, measure.vars = measure.vars)
 ggplot(sports.df, aes(x = variable, y = count, fill = value)) +
   geom_boxplot() +
   scale_fill_manual(values = boxplot.binary.colors) +
+  # theme(legend.position = top) +
   labs(title = "Pro sports events & combined 'sporting_event'")
 
 
+## Boxplot: sporting_event
+sportinghours.any.box <- ggplot(bikeplot.df,
+    aes(x = sporting_event, y = count, fill = sporting_event)) +
+  geom_boxplot() +
+  scale_fill_manual(values = boxplot.binary.colors) +
+  theme(legend.position = "none") +
+  labs(title = "sporting_event: all hours")
+
+
 # Boxplot: sporting_event only during comparable times of day
-sportinghours.train.df <- subset(bikeplot.df, (hour > 17) | (hour > 11 & hour < 16))
-ggplot(sportinghours.train.df, 
+sportinghours.df <- subset(bikeplot.df, (hour > 17) | (hour > 11 & hour < 16))
+sportinhours.comp.box <- ggplot(sportinghours.df, 
        aes(x = sporting_event, y = count, fill = sporting_event)) + 
   geom_boxplot() +
   #theme_minimal() +
+  theme(legend.position = "none") +
   scale_fill_manual(values = boxplot.binary.colors) +
-  labs(title = "sporting_event: comparable times", subtitle = "(noon - 15:59 or after 17:59)")
+  labs(title = "sporting_event: noon-15:59 or after 17:59")
 
+  
+grid.arrange(sportinghours.any.box, sportinhours.comp.box, ncol = 2)
 
 # --------- UNIVERSITIES IN SESSION... LOWER DEMAND ??? --------- 
 measure.vars = c("cua_session", "au_session", "howard_session", "session_any")

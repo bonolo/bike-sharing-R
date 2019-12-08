@@ -1,4 +1,3 @@
-
 # Project - CIS 575 - Final Report - Kevin F. Cullen
 
 ## 1. Executive summary
@@ -60,15 +59,15 @@ Some of this was ugly cut & paste from PDFs or HTML into Excel. I used Pentaho/V
 
 I pulled the following subsets together via SQL SELECT with several OUTER JOINs. I exported the data to a CSV file with MySQL's SELECT... INTO OUTFILE syntax and brought into R for further exploration.
 
-Related files...
+Related file(s)
 
     create+select.sql       transformations and joins
+    bike_sharing.sql        (MySQL database export)
     bike_sharing.kjb        (Pentaho PDI ETL Job)
     kaggle_data.ktr         (Pentaho PDI Transformation file)
     kaggle_data_plus.csv    unified data file (test + train, kaggle + my additional data)
 
-
-#### 4.b.1. House and Senate "in session" variables [house-senate-in-session.csv]
+#### 4.b.1. House and Senate "in session" variables
 
 Perhaps DC is busier when the legislators are around. I created CSV files from the official calendars of the 112th Congress (<https://www.congress.gov/past-days-in-session>). It took 20 minutes and seemed faster than screen-scraping.
 
@@ -78,7 +77,7 @@ Variables
     House       binary
     Senate      binary
 
-#### 4.b.2. University calendars [dc-university-sessions.csv]
+#### 4.b.2. University calendars
 
 University students are a prime demographic for bike sharing. I wanted to capture days when students were likely in town, but not burdened by exams, etc. I found 2011 calendars for the 3rd, 4th, and 5th-largest universities in the DC area (but not 1st or 2nd). I made a CSV to demark days I considered class to be in session. I included weekends but excluded: Thanksgiving breaks, spring breaks, exam weeks, and summer sessions.
 
@@ -92,7 +91,7 @@ Variables...
 
 #### 4.b.3. Sunrise/sunset -> binary `is_daylight` variable
 
-Cycling is much more dangerous at night, so I found a 2011 sunrise/sunset calendar for the Washington, DC area at <https://www.sunearthtools.com/solar/sunrise-sunset-calendar.php>. Used Excel to create CSVs and loaded them into a MySQL table:
+Cycling is much more dangerous at night, so I found a 2011 sunrise/sunset calendar for the Washington, DC area at <https://www.sunearthtools.com/solar/sunrise-sunset-calendar.php>. I used Excel to create CSVs and loaded them into a MySQL table with Pentaro ELT:
 
     +---------+------+
     | Date    | date |
@@ -118,7 +117,7 @@ Formats varied greatly. Once the CSVs were in MySQL, I massaged and joined them 
 
 Using start times from the CSV files + typical game lengths, I used SQL to set the binary flag to TRUE for hours during which games were being held, along with a bit of buffer on either side for travel to and from the games. I excluded away games for all.
 
-##### 4.b.4.1. Washington Capitals (NHL) [capitals-schedule-2011.csv]
+##### 4.b.4.1. Washington Capitals (NHL)
 
 Gathered from: <https://www.nhl.com/capitals/news/capitals-announce-composite-2010-11-television-schedule/c-537574> and <https://www.hockey-reference.com/teams/WSH/2012_games.html>
 
@@ -127,7 +126,7 @@ Gathered from: <https://www.nhl.com/capitals/news/capitals-announce-composite-20
     caps_time   (HH:mm:ss)
 
 
-##### 4.b.4.2. Washington Nationals (MLB) [nationals-schedule-2011.csv]
+##### 4.b.4.2. Washington Nationals (MLB)
 
 Gathered from: <https://www.retrosheet.org/schedule/>
 
@@ -140,14 +139,14 @@ I replaced `Nationals_Game_Time` strings ("D" or "N") with typical game times.
 - N (Night) ~19:05
 
 
-##### 4.b.4.3. Washington Wizards (NBA) [washington-wizards-2011-schedule.csv]
+##### 4.b.4.3. Washington Wizards (NBA)
 
 Gathered from: <https://www.basketball-reference.com/teams/WAS/2012_games.html>.
 
     start_ET      time (HH:mm:ss)
     Date_iso      iso date
 
-##### 4.b.4.4. DC United (MLS) [dc_united-2011-schedule.csv]
+##### 4.b.4.4. DC United (MLS)
 
 Gathered from: <https://en.wikipedia.org/wiki/2011_D.C._United_season>
 
@@ -159,7 +158,13 @@ Gathered from: <https://en.wikipedia.org/wiki/2011_D.C._United_season>
 
 ## 5. Discussion of preliminary data exploration and findings
 
-The data was clean. The only missing values were the counts in the test data set.
+Related file(s)
+
+    bike-sharing-plots.R       Plots
+
+
+
+The data was clean. The only missing values were the counts in the test data set for submission to Kaggle.
 
     > describe(bikeall.df$count)
     bikeall.df$count
@@ -172,7 +177,7 @@ The data was clean. The only missing values were the counts in the test data set
 - ranged from 1 to 977
 - median: 145
 - mean: 191
-- distribution: heavily right-tailed; peaks at far left (count = 1 to 5)
+- distribution: heavily right-tailed; peaks at far left (`count` = 1 to 5)
 
 While examining the data, I noticed the distribution of `count` is quite different between day/night or peak/offpeak. I even used this to build a split model.
 
@@ -198,7 +203,7 @@ The `holiday` variable seemed a poor predictor. Unsurprisingly, usage tends to b
 
 `weather` and `season` seemed to influence demand. However, `count` was much lower in spring than other seasons. Perhaps the service launched that spring, or DC gets terrible weather in spring (snow, etc).
 
-Weather had 4 categorical values, but weather = 4 only appeared in three observations (among 10,000+ records). This caused problems in modeling because the value would sometimes only appear in validation, but not training.
+`weather` had 4 categorical values, but `weather` = 4 only appeared in three observations (among 10,000+ records). This caused problems in modeling because the value would sometimes only appear in validation, but not training.
 
 ![Boxplot: Weather and Season](plots/weather-season-boxplot-histo.png "Boxplot: Weather and Season")
 
@@ -252,9 +257,10 @@ Universities all tended to be in or out of session at the same time (as seen in 
 
 ## 6. Description of data preparation
 
-Related files:
+Related file(s)
 
     bike-sharing-setup.R
+    bike-sharing-models.R
     create+select.sql
 
 ### 6.a. Repairs
@@ -322,7 +328,7 @@ I couldn't think of any reasons to cluster the data, given my assumption that re
 
 ## 7. Description of data modeling/analyses and assessments
 
-Related files...
+Related file(s)
 
     bike-sharing-models.R        (R code)
 
@@ -379,9 +385,9 @@ These are only some of the models I created. Late in the project, I added two mo
 
 ### Linear, polynomial, logarithmic regression - General
 
-This was fairly easy, so I tried a number of different combinations with lm(), glm(), gam(), etc. I also tried using the polynomial and logarithmic options with lm(). My best model turned out to be one which split the data in two partitions: one for a generalized additive model (gam()) and the other for a regression tree.
+This was fairly easy, so I tried a number of different combinations with lm(), glm(), gam(), etc. I also tried polynomial and logarithmic options with lm(). My best model split the data in two partitions: one for a generalized additive model ( gam() ) and the other for a regression tree.
 
-I created over a dozen regression models and only honed the ones which got the best RMSLE validation scores. I submitted scoring data sets to Kaggle for the most promising models.
+I created over a dozen regression models. After calculating initial RMSLE to identify the most promising models, I honed them and submitted scoring data sets to Kaggle.
 
 NB: Linear regression created many negative predictions. Negative numbers cause errors when trying to calculate RMSLE, so I chose to convert negative predictions to 0.
 
@@ -452,7 +458,7 @@ Following my success with linear regression on partitioned data, I started testi
 This took me a long time to get working.
 
 - I had to scale variables, which required some code refactoring. All the sample code I found involved scaling and de-scaling the target variable. I got that to work, but it seemed pointless, so I went back and re-wrote my code to leave my target variable unscaled.
-- I tried adding some binary predictors to the neural network without scaling, but they actually lowered the ME and RMSE.
+- I tried adding some binary predictors to the neural network without scaling, but they actually raised evaluation statistic.
 - nn often finished with error that "Algorithm did not converge in 1 of 1 (or 3 or 3, or 4 of 4) repetition(s) within the stepmax."
   - I first thought this was due to lack of scaling, based upon recommendations I read.
   - The error continued even after scaling and tinkering with parameters.
@@ -495,7 +501,7 @@ Once I thought a model was in decent working order, I submitted it to Kaggle. Un
 
 After building my first set of models, I went back and used scaled data in them, but results weren't much improved. In the end, I simply sorted my Kaggle submissions by RMSLE to see which had worked the best.
 
-Once I got the hang of linear, polynomial, multiple and GAM regression, I started to throw all sorts of variables into the mix. Most models faired poorly with one variable, but once I split into day/night hours, I got better results with combined models.
+Once I got the hang of linear, polynomial, multiple and GAM regression, I started to throw all sorts of variables into the mix. Most models faired poorly with one variable, but once I split into day/night hours, I got better results by partitioning and then training separate models.
 
 
 ## 9. Conclusions and recommendations
@@ -519,3 +525,24 @@ I learned a lot about R from this project. I thought it was worth spending all t
 1. After this semester, I won't have access to SAS.
 1. I signed up for CIS 576 next semester, a course which includes plotting in R.
 1. Faced with a choice between spending countless hours dealing with SAS instability and crashes or many hours of learning R, I chose to learn R .
+
+
+## 10. Appendices [appendices-kevin-cullen-final-project.zip]
+
+Rather than including anything here, I have submitted the following source files to show my work.
+
+    bike-sharing-models.R             Models. Partitioning. Transformations
+    bike-sharing-plots.R              Plots.
+    bike-sharing-setup.R              Read and manipulate data. Set variables. Explore.
+    bike_sharing_etl.ktr              Hitachi Vantara Pentaho ETL
+    bike_sharing_mysqldump.sql.zip    MySQL database export
+    create+select.sql                 SQL. Transformations. Joins. Exploration.
+    predictions-for-kaggle.zip        CSV predictions for scoring by Kaggle.
+
+### Tools used
+
+- R and RStudio
+- MySQL / SQL
+- Hitachi Vantara Pentaho PDI (ETL)
+- MS Excel
+

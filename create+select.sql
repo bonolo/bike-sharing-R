@@ -280,6 +280,7 @@ LEFT OUTER JOIN bike_sharing.university_sessions
     
 INNER JOIN sunrise_sunset
 ON MID(kaggle_data.`datetime`, 6, 5) = MID(sunrise_sunset.Date, 6, 5)
+
 ;
 
  INTO OUTFILE '/Users/kcullen/Projects/cis575/bike-sharing/csv-inputs/kaggle_data_plus.csv'
@@ -325,9 +326,9 @@ TRUNCATE sunrise_sunset;
 
 SELECT * FROM sunrise_sunset;
 
-SELECT `datetime` -- , `count`
-, MID(`datetime`, 6, 5) AS partial
-, Sunrise, Sunset
+SELECT `datetime`
+-- , MID(`datetime`, 6, 5) AS partial
+-- , Sunrise, Sunset
 , (TIME(`datetime`) > sunrise_sunset.Sunrise AND TIME(`datetime`) < sunrise_sunset.Sunset) AS is_daylight
 FROM kaggle_data
 LEFT OUTER JOIN sunrise_sunset

@@ -624,29 +624,29 @@ offpeak.test.df <- subset(biketest.df, hour < 9 | hour > 20)
 
 # -- Linear regression. Single, scaled variable. Partition peak & offpeak -----------
 # RMSLE 1.24144 (scored)
-# RMSLE 1.68000 (scored) using daylight instead of day/offpeak
+# RMSLE 1.68000 (scored) using daylight instead of peak/offpeak
 
 # try with just daytime hours
-scaled.day.lm <- lm(count ~ scaled_atemp, data = peak.training.df, na.action = na.exclude)
+scaled.peak.lm <- lm(count ~ scaled_atemp, data = peak.training.df, na.action = na.exclude)
 
 # stepwise selection version
-scaled.stepwise.day.lm <- lm(count ~., data = peak.training.df, na.action = na.exclude)
-scaled.stepwise.day.lm <- step(scaled.stepwise.day.lm, direction = "both")
-summary(scaled.stepwise.day.lm)
+scaled.stepwise.peak.lm <- lm(count ~., data = peak.training.df, na.action = na.exclude)
+scaled.stepwise.peak.lm <- step(scaled.stepwise.peak.lm, direction = "both")
+summary(scaled.stepwise.peak.lm)
 
 # training
-scaled.day.lm.train.pred <- predict(scaled.day.lm, na.action = na.pass)
+scaled.peak.lm.train.pred <- predict(scaled.peak.lm, na.action = na.pass)
 # validation
-scaled.day.lm.valid.pred <- predict(scaled.day.lm, newdata = peak.validation.df, na.action = na.pass)
-scaled.stepwise.day.lm.valid.pred <- predict(scaled.stepwise.day.lm, newdata = peak.validation.df, na.action = na.pass)
+scaled.peak.lm.valid.pred <- predict(scaled.peak.lm, newdata = peak.validation.df, na.action = na.pass)
+scaled.stepwise.peak.lm.valid.pred <- predict(scaled.stepwise.peak.lm, newdata = peak.validation.df, na.action = na.pass)
 # is_daylight == 1 validation RMSLE: 0.814235
-# day/offpeak validation RMSLE: 0.602574
-# day/offpeak validation RMSLE: 0.593473 (GAM)
+# peak/offpeak validation RMSLE: 0.602574
+# peak/offpeak validation RMSLE: 0.593473 (GAM)
 # stepwise RMSLE: 0.733343
-rmsle(peak.validation.df$count, scaled.day.lm.valid.pred)
+rmsle(peak.validation.df$count, scaled.peak.lm.valid.pred)
 # stepwise version
-scaled.stepwise.day.lm.valid.pred <- negative_to_zero(scaled.stepwise.day.lm.valid.pred)
-rmsle(peak.validation.df$count, scaled.stepwise.day.lm.valid.pred)
+scaled.stepwise.peak.lm.valid.pred <- negative_to_zero(scaled.stepwise.peak.lm.valid.pred)
+rmsle(peak.validation.df$count, scaled.stepwise.peak.lm.valid.pred)
 
 # try with just off hours
 scaled.offpeak.lm <- lm(count ~ scaled_atemp, data = offpeak.training.df, na.action = na.exclude)
@@ -657,15 +657,15 @@ scaled.offpeak.lm.train.pred <- predict(scaled.offpeak.lm, na.action = na.pass)
 # validation
 scaled.offpeak.lm.valid.pred <- predict(scaled.offpeak.lm, newdata = offpeak.validation.df, na.action = na.pass)
 # is_daylight == 0 validation RMSLE: 1.6016
-# day/offpeak validation RMSLE: 1.62375
-# day/offpeak validation RMSLE: 1.62431 (GAM)
+# peak/offpeak validation RMSLE: 1.62375
+# peak/offpeak validation RMSLE: 1.62431 (GAM)
 rmsle(offpeak.validation.df$count, scaled.offpeak.lm.valid.pred)
 
 # Predict test/scoring dataset
-scaled.lm.day.test.pred <- predict(scaled.day.lm, newdata = peak.test.df, na.action = na.pass)
+scaled.lm.peak.test.pred <- predict(scaled.peak.lm, newdata = peak.test.df, na.action = na.pass)
 scaled.lm.offpeak.test.pred <- predict(scaled.offpeak.lm, newdata = offpeak.test.df, na.action = na.pass)
 
-day.df <- data.frame(datetime = peak.test.df$datetime, count = scaled.lm.peak.test.pred)
+peak.df <- data.frame(datetime = peak.test.df$datetime, count = scaled.lm.peak.test.pred)
 offpeak.df <- data.frame(datetime = offpeak.test.df$datetime, count = scaled.lm.offpeak.test.pred)
 
 scaled.peakoffpeak.pred.df <- rbind(peak.df, offpeak.df)
