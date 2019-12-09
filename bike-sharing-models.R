@@ -392,12 +392,47 @@ write.csv(data.frame(datetime = biketest.df$datetime, count = rt.optimal.pred),
 # http://uc-r.github.io/regression_trees#bag
 # See Chapter 13 for further details on bagging. ---
 
-# -- random forest???
 # -- boosted trees???
 
+# -- random forest??? --------------------------------------
+library(randomForest)
+
+vars_to_use <- c('count', 'hour', 'month', 'is_daylight', 'workingday', 'atemp', 'senate',
+                 'session_any')
+rf_train.df <- subset(training.df, select = vars_to_use)
+rf_valid.df <- subset(validation.df, select = vars_to_use)
+
+rf <- randomForest(count ~ ., data = rf_train.df)
+
+# scored RMSLE: 0.54403 <--------------------------------------------------
+# scored RMSLE: 0.54590 with mtry = 7
+# ('count', 'hour', 'month', 'is_daylight', 'workingday', 'atemp', 'senate', 'session_any')
+rf <- randomForest(count ~ ., data = rf_train.df, ntree = 500, 
+                   # mtry = 4, nodesize = 5, importance = TRUE)
+                   mtry = 7, importance = TRUE)
+
+# training: predict and check RMSLE
+rf.train.pred <- predict(rf, rf_train.df)
+rmsle(training.df$count, rf.train.pred)
+
+# validation: predict and check RMSLE
+rf.valid.pred <- predict(rf, rf_valid.df)
+rmsle(validation.df$count, rf.valid.pred)
+
+varImpPlot(rf) # , type = 1)
+
+# Courtesy https://uc-r.github.io/random_forests
+plot(rf)
+# number of trees with lowest MSE
+which.min(rf$mse)
+# RMSE of this optimal random forest
+sqrt(rf$mse[which.min(rf$mse)])
 
 
+# Predict scoring set
+predict_scoring_set(rf, "output/rf_ntree_500.csv")
 
+summary(rf)
 
 # -- Neural Network ------------------------------------
 # https://datascienceplus.com/neuralnet-train-and-test-neural-networks-using-r/

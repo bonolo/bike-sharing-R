@@ -14,7 +14,7 @@ I chose to hunt down additional data to combine with the Kaggle dataset's predic
 1. I have no experience with this sort of modeling, so I thought I might improve my results by using data which others had not.
 1. It would show some original work on my own part.
 
-The archive of public scores for this Kaggle competition shows an RMSLE range from 0.33756 to 23.38876 (excluding the single highest and lowest outliers) across a total of 12,967 entries. My best model had an RMSLE of 0.89011 and would be put me in a tie for 9,985th place.
+The archive of public scores for this Kaggle competition shows an RMSLE range from 0.33756 to 23.38876 (excluding the single highest and lowest outliers) across a total of 12,967 entries. My best model had an RMSLE of 0.54403 and would be put me at 6,867th place.
 
 ## 2. Business problem/opportunity (from proposal)
 
@@ -334,11 +334,12 @@ Related file(s)
 
 ### Models & final RMSLE (selective results)
 
-These are only some of the models I created. Late in the project, I added two more variables (`month` and `is_daylight`) and re-tested. In many cases, these variables improved scores.
+These are only some of the models I created. Late in the project, I added two more variables (`month` and `is_daylight`) and re-tested. In many cases, these variables improved scores. After turning in my report, I found time to try the random forest code in the textbook. Results were so good, I decided to resubmit my updated report.
 
                                                          | Orig     | With month & is_daylight
     Model                                                | RMSLE    | RMSLE
     ---------------------------------------------------------------------------
+    Random Forest                                        |          | 0.54403
     GAM + regression tree (partitioned day/off hours)    |          | 0.89011
     Regression tree - scaled data, no validation         | 0.89715  | unchanged
     Regression tree - scaled data                        | 0.90795  |
@@ -429,9 +430,9 @@ Late in the project, after I had added a number of predictors (including `is_day
 
 My visualizations showed distinctly different patterns of use between day and night. I decided to split my training and validation data by peak/offpeak hours (or using `is_daylight`). I originally built separate single-variable linear regression models for each and then split the test/scoring data to use with each model. This yielded better results than my multiple linear regression models.
 
-### Combination: GAM and Regression Tree (most accurate)
+### Combination: GAM and Regression Tree (2nd-most accurate)
 
-Following my success with linear regression on partitioned data, I started testing different forms of regression and managed to get my RMSLE to ~ 0.6 for the peak hours using a general additive model (GAM). The offpeak hours had terrible results with these basic types of regression, so I trained an optimized regression tree on offpeak data. Combining the two models on my partitioned data yielded the best results.
+Following my success with linear regression on partitioned data, I started testing different forms of regression and managed to get my RMSLE to ~ 0.6 for the peak hours using a general additive model (GAM). The offpeak hours had terrible results with these basic types of regression, so I trained an optimized regression tree on offpeak data. Combining the two models on my partitioned data yielded the 2nd best results.
 
     Family: gaussian
     Link function: identity
@@ -492,6 +493,20 @@ Since I had already scaled the data and my neural network performed about the sa
 
 For giggles, I finished by using my entire training data set to train this best model (no validation). This gave me a slight boost in RMSLE.
 
+### Random Forest (most accurate)
+
+The random forest explanation in the textbook was cursory, especially regarding regression. While my daughter was napping, I decided to pop my data into their code examples. I was immediately pleased with results. My RMSLE scores were < .3100 on training and validation. Kaggle-scored predictions scored RMSLE > 0.5.
+
+I tried some of the tutorial code at <https://uc-r.github.io/random_forests> but could not get their code for selecting optimal `mtry` to work. In the end, I achieved the best Kaggle-scored RMSLE (0.54403) using some of my favorite predictors with default settings.
+
+    # predictors: 'hour', 'month', 'is_daylight', 'workingday', 'atemp', 'senate', 'session_any'
+    rf <- randomForest(count ~ ., data = rf_train.df, ntree = 500,
+                         mtry = 4, nodesize = 5, importance = TRUE)
+
+The following shows importance of each variable.
+
+![rf variable importance](plots/rf-variable-importance.png "random forest variable importance")
+
 
 ## 8. Explanation of model comparisons and model selection
 
@@ -503,10 +518,12 @@ After building my first set of models, I went back and used scaled data in them,
 
 Once I got the hang of linear, polynomial, multiple and GAM regression, I started to throw all sorts of variables into the mix. Most models faired poorly with one variable, but once I split into day/night hours, I got better results by partitioning and then training separate models.
 
+The random forest was a last-minute addition that turned out to far out-perform others. If I had found it earlier in the process, I might have honed it better with time.
+
 
 ## 9. Conclusions and recommendations
 
-The biggest surprise from my analysis was how well my regression trees worked. They turned out to be fairly accurate, though I had expected them to perform the worst.
+The biggest surprise from my analysis was how well my regression trees worked. They turned out to be fairly accurate, though I had expected them to perform the worst. Random forest was a great tool for this data set and I didn't try them originally because the textbook example was so brief.
 
 Scaling data was useful and surprisingly easy. On a whim, I fed my scaled data into my regression tree code and got a big boost in accuracy.
 
@@ -517,6 +534,8 @@ In the hands of an expert, polynomial regression might have worked better than m
 I was pleased that the predictors I added to Kaggle's own set were consistently weighted highly. These were both derived/decomposed variables and data I hunted down and added on my own.
 
 Using forecasting and time series tools might yield better accuracy. I did not know how to use forecasting on a data set like this, where there were gaps in data every month. (Days 1-19 of each month were for training. Days 20-end of each month were in the test set and lacked values for the target `count` variable.) The textbook says "Nearly all standard forecasting methods cannot handle time series with missing values" (p. 395) Other sources I looked at stated the same thing. I suppose an expert could do sophisticated imputation to make up for the missing data.
+
+Barring the ability to use time series forecasting, I would try running separate random forests for peak and off-peak hours if I had more time.
 
 I learned a lot about R from this project. I thought it was worth spending all the extra time to teach myself plotting and modeling in R because...
 
