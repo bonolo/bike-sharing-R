@@ -4,9 +4,10 @@
 
 # Run `bike-sharing-setup.R` first.
 # That's where the library() calls and CSV reads live.
+source('bike-sharing-setup.R')
 
 
-# User-defined functions.
+# -- User-defined functions.
 
 # Predictions with negative values don't work with RMSLE (selected evaluation statistic)
 negative_to_zero <- function(predictions) {
@@ -16,17 +17,29 @@ negative_to_zero <- function(predictions) {
 
 
 # Predict scoring set with model and saved to relative file_name.
-predict_scoring_set <- function(model_to_score, file_name) {
+predict_scoring_set <- function(model_to_score, file_name, newdata = biketest.df) {
   # file_name e.g. "output/nn_defaults_5_variables.csv"
-  pred <- predict(model_to_score, newdata = biketest.df, na.action = na.pass)
+  pred <- predict(model_to_score, newdata = newdata, na.action = na.pass)
   pred <- negative_to_zero(pred)
   # write submission in kaggle format
   # datetime,count
   # 2011-01-20 00:00:00,0
-  write.csv(data.frame(datetime = biketest.df$datetime, count = pred),
+  write.csv(data.frame(datetime = newdata$datetime, count = pred),
             file = file_name, row.names = FALSE)
 }
-  
+
+# courtesy of tutorial: http://uc-r.github.io/regression_trees
+# function to get optimal cp
+get_cp <- function(x) {
+  min <- which.min(x$cptable[, "xerror"])
+  cp <- x$cptable[min, "CP"] 
+}
+
+# function to get minimum error
+get_min_error <- function(x) {
+  min <- which.min(x$cptable[, "xerror"])
+  xerror <- x$cptable[min, "xerror"] 
+}
 
 
 # -- Keep only variables we would use for predictions. ----------
@@ -37,9 +50,12 @@ keeps <- c("count", "hour", "dayofweek", "month", "is_daylight", "season",
            "holiday", "workingday", "weather", "temp", "temp_squared", "atemp", "humidity", 
            "windspeed", "house", "senate", "sporting_event", "session_any",
            "scaled_hour", "scaled_dayofweek", "scaled_month", "scaled_season", "scaled_weather", 
-           "scaled_temp", "scaled_temp_squared", "scaled_atemp", "scaled_humidity", "scaled_windspeed")
+           "scaled_temp", "scaled_temp_squared", "scaled_atemp", "scaled_humidity", "scaled_windspeed",
+           "house_num", "senate_num", "session_any_num")
 biketrain.df <- subset(bikeall.df, train == 1)
-biketrain.df <- biketrain.df[keeps]
+biketrain.df <- subset(biketrain.df, select = keeps)
+rm(keeps)
+
 
 # Take out weather = 4. There are only 3 of these observations, which wreaks havoc with modeling.
 # Many times, I get "Error in model.frame.default(Terms, newdata, na.action = na.action, xlev = object$xlevels) : 
@@ -47,6 +63,7 @@ biketrain.df <- biketrain.df[keeps]
 # biketrain.df$weather <- as.character(biketrain.df$weather)
 # biketrain.df$weather[biketrain.df$weather =="4"] <- "3"
 # biketrain.df$weather <- as.factor(biketrain.df$weather)
+
 
 
 
@@ -59,6 +76,26 @@ ss <- sample(1:2, size = nrow(biketrain.df), replace = TRUE, prob = c(0.6, 0.4))
 # training.df = biketrain.df[ss==1,]
 training.df = biketrain.df
 validation.df = biketrain.df[ss==2,]
+
+
+
+# Split into peak & offpeak for relevant models
+offpeak.training.df <- subset(training.df, hour < 9 | hour > 20)
+offpeak.validation.df <- subset(validation.df, hour < 9 | hour > 20)
+peak.training.df <- subset(training.df, hour < 21 & hour > 8)
+peak.validation.df <- subset(validation.df, hour < 21 & hour > 8)
+
+# Use is_daylight to split
+# offpeak.training.df <- subset(training.df, is_daylight == 0)
+# offpeak.validation.df <- subset(validation.df, is_daylight == 0)
+# peak.training.df <- subset(training.df, is_daylight == 1)
+# peak.validation.df <- subset(validation.df, is_daylight == 1)
+  
+# Partition biketest.df Scoring data set
+# peak.test.df <- subset(biketest.df, is_daylight == 0)
+# offpeak.test.df <- subset(biketest.df, is_daylight == 1)
+peak.test.df <- subset(biketest.df, hour < 21 & hour > 8)
+offpeak.test.df <- subset(biketest.df, hour < 9 | hour > 20)
 
 
 
@@ -76,91 +113,84 @@ mlr_valid.df <- subset(validation.df, select = vars_to_use)
 
 bike.lm <- lm(count ~ ., data = mlr_train.df, na.action = na.exclude)
 # training: RMSlE 1.29602
-pred_t <- predict(bike.lm, na.action = na.pass)
-forecast::accuracy(pred_t, mlr_train.df$count)
+pred.train <- predict(bike.lm, na.action = na.pass)
+pred.train <- negative_to_zero(pred.train)
 # Metrics::rmsle(actual, predicted)
-pred_t <- negative_to_zero(pred_t)
-rmsle(mlr_train.df$count, pred_t)
+rmsle(mlr_train.df$count, pred.train)
 
 # validation: RMSLE 1.2773
-pred_v <- predict(bike.lm, newdata = validation.df, na.action = na.pass)
-forecast::accuracy(pred_v, validation.df$count)
-pred_v <- negative_to_zero(pred_v)
-rmsle(mlr_valid.df$count, pred_v)
+pred.valid <- predict(bike.lm, newdata = validation.df, na.action = na.pass)
+pred.valid <- negative_to_zero(pred.valid)
+rmsle(mlr_valid.df$count, pred.valid)
 
-summary(bike.lm)
+# remove variables
+rm(list = c('mlr_train.df', 'mlr_valid.df', 'vars_to_use', 'pred.train', 'pred.valid'))
+# summary(bike.lm)
 
+predict_scoring_set(bike.lm, 'output/test-function.csv')
 
 
 # -- Generalized additive model. Single variable: temp -------------
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 bike.gam <- gam(count ~ s(temp), data = training.df)
-# predict training data and check accuracy
-gam.train.pred <- predict(bike.gam, na.action = na.pass)
 
+# predict training data and check accuracy
+pred.train <- predict(bike.gam, na.action = na.pass)
 # training: RMSLE 1.43698
-gam.train.pred <- negative_to_zero(gam.train.pred)
-rmsle(training.df$count, gam.train.pred)
+pred.train <- negative_to_zero(pred.train)
+rmsle(training.df$count, pred.train)
 
 # predict validation data and check accuracy
-gam.valid.pred <- predict(bike.gam, newdata = validation.df, na.action = na.pass)
+pred.valid <- predict(bike.gam, newdata = validation.df, na.action = na.pass)
 
 # validation: RMSLE 1.42552
-gam.valid.pred <- negative_to_zero(gam.valid.pred)
-rmsle(validation.df$count, gam.valid.pred)
+pred.valid <- negative_to_zero(pred.valid)
+rmsle(validation.df$count, pred.valid)
+
+# remove variables
+rm(list = c('pred.train', 'pred.valid'))
 
 
 # -- Generalized additive model. Single variable: atemp -------------
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 bike.gam <- gam(count ~ s(atemp), data = training.df)
-# predict training data and check accuracy
-gam.train.pred <- predict(bike.gam, na.action = na.pass)
 
+# predict training data and check accuracy
+pred.train <- predict(bike.gam, na.action = na.pass)
 # training: RMSLE 1.44657
-gam.train.pred <- negative_to_zero(gam.train.pred)
-rmsle(training.df$count, gam.train.pred)
+pred.train <- negative_to_zero(pred.train)
+rmsle(training.df$count, pred.train)
 
 # predict validation data and check accuracy
-gam.valid.pred <- predict(bike.gam, newdata = validation.df, na.action = na.pass)
+pred.valid <- predict(bike.gam, newdata = validation.df, na.action = na.pass)
 
 # validation: RMSLE 1.43655
-gam.valid.pred <- negative_to_zero(gam.valid.pred)
-rmsle(validation.df$count, gam.valid.pred)
+pred.valid <- negative_to_zero(pred.valid)
+rmsle(validation.df$count, pred.valid)
 
+# remove variables
+rm(list = c('pred.train', 'pred.valid'))
 
 
 # -- Generalized additive model. Single variable: humidity -------------
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 bike.gam <- gam(count ~ s(humidity), data = training.df)
-# predict training data and check accuracy
-gam.train.pred <- predict(bike.gam, na.action = na.pass)
 
+# predict training data and check accuracy
+pred.train <- predict(bike.gam, na.action = na.pass)
 # training: RMSLE 1.47188
-gam.train.pred <- negative_to_zero(gam.train.pred)
-rmsle(training.df$count, gam.train.pred)
+pred.train <- negative_to_zero(pred.train)
+rmsle(training.df$count, pred.train)
 
 # predict validation data and check accuracy
-gam.valid.pred <- predict(bike.gam, newdata = validation.df, na.action = na.pass)
+pred.valid <- predict(bike.gam, newdata = validation.df, na.action = na.pass)
 
 # validation: RMSLE 1.45779
-gam.valid.pred <- negative_to_zero(gam.valid.pred)
-rmsle(validation.df$count, gam.valid.pred)
+pred.valid <- negative_to_zero(pred.valid)
+rmsle(validation.df$count, pred.valid)
 
-
-
-# require(xts)
-# 
-# time_index <- seq(from = as.POSIXct("2011-01-01 00:00"),
-#                   to = as.POSIXct("2012-12-31 23:00"), by = "hour")
-# set.seed(1)
-# value <- rnorm(n = length(time_index))
-# eventdata <- xts(value, order.by = time_index)
-# ets(eventdata)
-##
-
-#  generate the naive and seasonal naive forecasts
-# naive.pred <- naive(train.ts, h = nValid)
-# snaive.pred <- snaive(train.ts, h = nValid)
+# remove variables
+rm(list = c('pred.train', 'pred.valid'))
 
 
 
@@ -169,19 +199,21 @@ rmsle(validation.df$count, gam.valid.pred)
 temp.lm <- lm(count ~ temp, data = training.df)
 
 # predict training data and check accuracy
-temp.lm.train.pred <- predict(temp.lm, na.action = na.pass)
+pred.train <- predict(temp.lm, na.action = na.pass)
 
 # training: RMSLE 1.44339
-temp.lm.train.pred <- negative_to_zero(temp.lm.train.pred)
-rmsle(training.df$count, temp.lm.train.pred)
+pred.train <- negative_to_zero(pred.train)
+rmsle(training.df$count, pred.train)
 
 # predict validation data and check accuracy
-temp.lm.valid.pred <- predict(temp.lm, newdata = validation.df, na.action = na.pass)
+pred.valid <- predict(temp.lm, newdata = validation.df, na.action = na.pass)
 
 # validation: RMSLE 1.43295
-temp.lm.valid.pred <- negative_to_zero(temp.lm.valid.pred)
-rmsle(validation.df$count, temp.lm.valid.pred)
+pred.valid <- negative_to_zero(pred.valid)
+rmsle(validation.df$count, pred.valid)
 
+# remove variables
+rm(list = c('pred.train', 'pred.valid'))
 
 
 
@@ -190,18 +222,21 @@ rmsle(validation.df$count, temp.lm.valid.pred)
 humidity.lm <- lm(count ~ humidity, data = training.df)
 
 # predict training data and check accuracy
-humidity.lm.train.pred <- predict(humidity.lm, na.action = na.pass)
+pred.train <- predict(humidity.lm, na.action = na.pass)
 
 # training: RMSLE 1.48162
-humidity.lm.train.pred <- negative_to_zero(humidity.lm.train.pred)
-rmsle(training.df$count, humidity.lm.train.pred)
+pred.train <- negative_to_zero(pred.train)
+rmsle(training.df$count, pred.train)
 
 # predict validation data and check accuracy
-humidity.lm.valid.pred <- predict(humidity.lm, newdata = validation.df, na.action = na.pass)
+pred.valid <- predict(humidity.lm, newdata = validation.df, na.action = na.pass)
 
 # validation: RMSLE 1.46728
-humidity.lm.valid.pred <- negative_to_zero(humidity.lm.valid.pred)
-rmsle(validation.df$count, humidity.lm.valid.pred)
+pred.valid <- negative_to_zero(pred.valid)
+rmsle(validation.df$count, pred.valid)
+
+# remove variables
+rm(list = c('pred.train', 'pred.valid'))
 
 
 
@@ -217,25 +252,28 @@ bike.lm <- lm(count ~ ., data = training.df, na.action = na.exclude)
 bike.step.lm <- step(bike.lm, direction = "both")
 summary(bike.step.lm)
 
-bike.step.lm.pred <- predict(bike.step.lm, training.df)
+pred.train <- predict(bike.step.lm, training.df)
 
 # training: RMSLE 1.19448
-bike.step.lm.pred <- negative_to_zero(bike.step.lm.pred)
-rmsle(training.df$count, bike.step.lm.pred)
+pred.train <- negative_to_zero(pred.train)
+rmsle(training.df$count, pred.train)
 
 # predict validation data
-bike.step.lm.valid.pred <- predict(bike.step.lm, validation.df)
+pred.valid <- predict(bike.step.lm, validation.df)
 
 # validation: RMSLE 1.18628
-bike.step.lm.valid.pred <- negative_to_zero(bike.step.lm.valid.pred)
-rmsle(validation.df$count, bike.step.lm.valid.pred)
+pred.valid <- negative_to_zero(pred.valid)
+rmsle(validation.df$count, pred.valid)
+
+# remove variables
+rm(list = c('pred.train', 'pred.valid'))
 
 # Predict scoring set
 predict_scoring_set(bike.step.lm, "output/lm_stepwise_selection.csv")
 
-
 # residuals <- bike.step.lm.pred - validation.df$count
 # hist(residuals, breaks = 50, xlab = "residual (predicted - actual)")
+
 
 
 # -- Polynomial regression -------------------------------
@@ -243,37 +281,43 @@ predict_scoring_set(bike.step.lm, "output/lm_stepwise_selection.csv")
 polynomial.temp.lm <- lm(data = training.df, count ~ poly(temp, 2, raw = TRUE))
 summary(polynomial.temp.lm)
 
-polynomial.pred <- predict(polynomial.temp.lm, training.df)
+pred.train <- predict(polynomial.temp.lm, training.df)
 
 # training: RMSLE 1.43911
-polynomial.pred <- negative_to_zero(polynomial.pred)
-rmsle(training.df$count, polynomial.pred)
+pred.train <- negative_to_zero(pred.train)
+rmsle(training.df$count, pred.train)
 
 # predict validation data
-polynomial.valid.pred <- predict(polynomial.temp.lm, validation.df)
+pred.valid <- predict(polynomial.temp.lm, validation.df)
 
 # validation: RMSLE 1.42811
-polynomial.valid.pred <- negative_to_zero(polynomial.valid.pred)
-rmsle(validation.df$count, polynomial.valid.pred)
+pred.valid <- negative_to_zero(pred.valid)
+rmsle(validation.df$count, pred.valid)
+
+# remove variables
+rm(list = c('pred.train', 'pred.valid'))
+
 
 
 # -- Log transformation regression -------------------------------
 log.temp.lm <- lm(data = training.df, count ~ log(temp))
 summary(log.temp.lm)
 
-log.temp.pred <- predict(log.temp.lm, training.df)
+pred.train <- predict(log.temp.lm, training.df)
 
 # training: RMSLE 1.48783
-log.temp.pred <- negative_to_zero(log.temp.pred)
-rmsle(training.df$count, log.temp.pred)
+pred.train <- negative_to_zero(pred.train)
+rmsle(training.df$count, pred.train)
 
 # predict validation data
-log.temp.valid.pred <- predict(log.temp.lm, validation.df)
+pred.valid <- predict(log.temp.lm, validation.df)
 
 # validation: RMSLE 1.47595
-log.temp.valid.pred <- negative_to_zero(log.temp.valid.pred)
-rmsle(validation.df$count, log.temp.valid.pred)
+pred.valid <- negative_to_zero(pred.valid)
+rmsle(validation.df$count, pred.valid)
 
+# remove variables
+rm(list = c('pred.train', 'pred.valid'))
 
 
 
@@ -335,18 +379,6 @@ for (i in 1:nrow(hyper_grid)) {
   )
 }
 
-# function to get optimal cp
-get_cp <- function(x) {
-  min <- which.min(x$cptable[, "xerror"])
-  cp <- x$cptable[min, "CP"] 
-}
-
-# function to get minimum error
-get_min_error <- function(x) {
-  min <- which.min(x$cptable[, "xerror"])
-  xerror <- x$cptable[min, "xerror"] 
-}
-
 hyper_grid %>%
   mutate(
     cp    = purrr::map_dbl(models, get_cp),
@@ -367,24 +399,16 @@ optimal_tree <- rpart(
   control = list(minsplit = 16, maxdepth = 71, cp = 0.01)
 )
 
-rt.optimal.pred <- predict(optimal_tree, newdata = validation.df)
-rmsle(validation.df$count, rt.optimal.pred)
+pred.valid <- predict(optimal_tree, newdata = validation.df)
+rmsle(validation.df$count, pred.valid)
 
 rpart.plot(optimal_tree)
 
-# -- Predict from competition data. Remove negatives and write to CSV -------------------
+# remove variables
+rm(list = c('rt_train.df', 'rt_valid.df', 'vars_to_use', 'pred.valid'))
 
 ## Predictions with test/competition data.
-# rt.optimal.pred <- predict(optimal_tree, newdata = biketest.df, na.action = na.pass)
 predict_scoring_set(optimal_tree, "output/regression_tree_optimal.csv")
-
-# write submission in kaggle format
-# datetime,count
-# 2011-01-20 00:00:00,0
-write.csv(data.frame(datetime = biketest.df$datetime, count = rt.optimal.pred),
-          file = "output/regression_tree_optimal.csv", row.names=FALSE)
-
-
 
 
 
@@ -392,11 +416,12 @@ write.csv(data.frame(datetime = biketest.df$datetime, count = rt.optimal.pred),
 # http://uc-r.github.io/regression_trees#bag
 # See Chapter 13 for further details on bagging. ---
 
+
 # -- boosted trees???
 
-# -- random forest??? --------------------------------------
-library(randomForest)
 
+
+# -- random forest??? --------------------------------------
 vars_to_use <- c('count', 'hour', 'month', 'is_daylight', 'workingday', 'atemp', 'senate',
                  'session_any')
 rf_train.df <- subset(training.df, select = vars_to_use)
@@ -412,12 +437,12 @@ rf <- randomForest(count ~ ., data = rf_train.df, ntree = 500,
                    mtry = 7, importance = TRUE)
 
 # training: predict and check RMSLE
-rf.train.pred <- predict(rf, rf_train.df)
-rmsle(training.df$count, rf.train.pred)
+pred.train <- predict(rf, rf_train.df)
+rmsle(training.df$count, pred.train)
 
 # validation: predict and check RMSLE
-rf.valid.pred <- predict(rf, rf_valid.df)
-rmsle(validation.df$count, rf.valid.pred)
+pred.valid <- predict(rf, rf_valid.df)
+rmsle(validation.df$count, pred.valid)
 
 varImpPlot(rf) # , type = 1)
 
@@ -429,35 +454,19 @@ which.min(rf$mse)
 sqrt(rf$mse[which.min(rf$mse)])
 
 
+# remove variables
+rm(list = c('rf_train.df', 'rf_valid.df', 'vars_to_use', 'pred.train', 'pred.valid'))
+
 # Predict scoring set
 predict_scoring_set(rf, "output/rf_ntree_500.csv")
 
 summary(rf)
 
+
+
 # -- Neural Network ------------------------------------
 # https://datascienceplus.com/neuralnet-train-and-test-neural-networks-using-r/
 # more complex: https://datascienceplus.com/fitting-neural-network-in-r/
-
-# Take just the binary and scaled numeric predictors
-vars_to_use <- c("count", "scaled_hour", "scaled_dayofweek", "scaled_month", "scaled_season",
-                 "scaled_weather", "house", "senate", "scaled_temp", "scaled_humidity",
-                 "scaled_windspeed", "session_any")
-nn_data.df <- subset(biketrain.df, select = vars_to_use)
-nn_test.df <- subset(biketest.df, select = vars_to_use)
-
-# Change some factors to numeric
-nn_data.df[,'house'] <- as.numeric(nn_data.df[,'house'])
-nn_data.df[,'senate'] <- as.numeric(nn_data.df[,'senate'])
-nn_data.df[,'session_any'] <- as.numeric(nn_data.df[,'session_any'])
-# and for test
-nn_test.df[,'house'] <- as.numeric(nn_test.df[,'house'])
-nn_test.df[,'senate'] <- as.numeric(nn_test.df[,'senate'])
-nn_test.df[,'session_any'] <- as.numeric(nn_test.df[,'session_any'])
-
-# Split out train and valid data
-scaled_train.df <- nn_data.df[ss==1,]
-scaled_valid.df <- nn_data.df[ss==2,]
-
 
 # nn <- neuralnet(count ~ hour + dayofweek + temp_squared + humidity + windspeed,
 #                   +                 data = scaled_train.df, hidden = c(4, 2), rep = 3,
@@ -478,21 +487,21 @@ scaled_valid.df <- nn_data.df[ss==2,]
 # An earlier version scored RMSLE = 0.99700 before adding scaled_month
 nn <- neuralnet(count ~ scaled_hour + scaled_dayofweek + scaled_month + scaled_temp + 
                   scaled_humidity + scaled_windspeed,
-                data = scaled_train.df,
+                data = training.df,
                 linear.output = TRUE)
 
 nn$result.matrix
 plot(nn)
 
 # Predict validation data set
-nn.pred <- compute(nn, scaled_valid.df)
+pred.valid <- compute(nn, validation.df)
 # validation: RMSLE 0.943854
-rmsle(scaled_valid.df$count, nn.pred$net.result)
+rmsle(validation.df$count, pred.valid$net.result)
 
+# remove variables
+rm(list = c('pred.valid'))
 
 # NN prediction from competition data.
-# nn.test.pred <- compute(nn, biketest.df)
-# nn.competition.results <- data.frame(datetime = biketest.df$datetime, count = nn.test.pred$net.result)
 predict_scoring_set(nn, "output/nn_defaults_6_variables.csv")
 
 
@@ -501,22 +510,26 @@ predict_scoring_set(nn, "output/nn_defaults_6_variables.csv")
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 # RMSLE: 1.26794
 # Withough scaled month, this goes down to 1.58455
+
 nn_binaries <- neuralnet(count ~ scaled_hour + scaled_dayofweek + scaled_temp + # scaled_month +
                            scaled_humidity + scaled_windspeed + scaled_season +
-                           senate + house + session_any,
-                         data = scaled_train.df, hidden = c(6, 3), rep = 3,
+                           senate_num + house_num + session_any_num,
+                         data = training.df, hidden = c(6, 3), rep = 3,
                          linear.output = TRUE)
 
 nn_binaries$result.matrix
 plot(nn_binaries)
 
 # Predict validation set
-nn_binaries.pred <- compute(nn_binaries, scaled_valid.df)
+pred.valid <- compute(nn_binaries, validation.df)
 # validation: RMSLE 1.55724
-rmsle(scaled_valid.df$count, nn_binaries.pred$net.result)
+rmsle(validation.df$count, pred.valid$net.result)
+
+# remove variables
+rm(list = c('pred.valid'))
 
 # Prediction from competition data.
-nn_binaries.test.pred <- compute(nn_binaries, nn_test.df)
+nn_binaries.test.pred <- compute(nn_binaries, biketest.df)
 nn_binaries.competition.results <- data.frame(datetime = biketest.df$datetime, count = nn_binaries.test.pred$net.result)
 
 # write submission in kaggle format
@@ -526,21 +539,17 @@ write.csv(nn_binaries.competition.results, file = "output/nn_binaries_10.csv", r
 
 
 
-
-
-
 # Regression tree: Scaled data  --------------
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 # RMSLE 0.89715 - no improvements when adding month, is_daylight, etc.
 # An earlier version scored RMSLE = 0.90795 60% training data
 
 # ALL IN !!!!!!! Use all data with no validation set.
-scaled_train.df <- nn_data.df
 
 # performing regression trees
 scaled_tree_1 <- rpart(
   formula = count ~ .,
-  data = scaled_train.df,
+  data = biketrain.df,
   method = "anova"
 )
 
@@ -549,7 +558,7 @@ plotcp(scaled_tree_1) # Maximum size/depth of tree = 16, or so it seems.
 
 scaled_tree_2 <- rpart(
   formula = count ~ .,
-  data = scaled_train.df,
+  data = biketrain.df,
   method = "anova",
   control = list(cp = 0, xval = 10)
 )
@@ -576,22 +585,10 @@ for (i in 1:nrow(hyper_grid)) {
   # train a model and store in the list
   models[[i]] <- rpart(
     formula = count ~ .,
-    data = scaled_train.df,
+    data = biketrain.df,
     method = "anova",
     control = list(minsplit = minsplit, maxdepth = maxdepth)
   )
-}
-
-# function to get optimal cp
-get_cp <- function(x) {
-  min <- which.min(x$cptable[, "xerror"])
-  cp <- x$cptable[min, "CP"] 
-}
-
-# function to get minimum error
-get_min_error <- function(x) {
-  min <- which.min(x$cptable[, "xerror"])
-  xerror <- x$cptable[min, "xerror"] 
 }
 
 hyper_grid %>%
@@ -607,25 +604,20 @@ hyper_grid %>%
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 scaled_optimal_tree <- rpart(
   formula = count ~ .,
-  data = scaled_train.df,
+  data = biketrain.df,
   method = "anova",
   control = list(minsplit = 12, maxdepth = 89, cp = 0.01)
 )
 
 # Predict against validation data
-rt.scaled.optimal.pred <- predict(scaled_optimal_tree, newdata = scaled_valid.df)
+pred.valid <- predict(scaled_optimal_tree, newdata = validation.df)
 # validation: RMSLE 0.860262
-rmsle(scaled_valid.df$count, rt.scaled.optimal.pred)
+rmsle(validation.df$count, pred.valid)
 
 
-# -- Regression tree: scaled data - prediction from competition data. --------------
+# Regression tree: scaled data - prediction from competition data. --------------
 # RMSLE of scored data: 0.89715
-rt.scaled.test.optimal.pred <- predict(scaled_optimal_tree, newdata = nn_test.df)
-# write submission in kaggle format
-# datetime,count
-# 2011-01-20 00:00:00,0
-write.csv(data.frame(datetime = biketest.df$datetime, count = rt.scaled.test.optimal.pred),
-          file = "output/regression_tree_scaled_all_train_data.csv", row.names = FALSE)
+predict_scoring_set(scaled_optimal_tree, "output/regression_tree_scaled_all_train_data.csv")
 
 
 plot(scaled_optimal_tree)
@@ -633,28 +625,13 @@ rpart.plot(scaled_optimal_tree)
 prp(scaled_optimal_tree)
 
 
+# remove variables
+rm(list = c('hyper_grid', 'models', 'pred.valid'))
+
+
+
 # ++ Split models. Partitioned by peak & offpeak -----------
 # or is_daylight 1, 0
-
-# Split into peak & offpeak
-offpeak.training.df <- subset(training.df, hour < 9 | hour > 20)
-offpeak.validation.df <- subset(validation.df, hour < 9 | hour > 20)
-peak.training.df <- subset(training.df, hour < 21 & hour > 8)
-peak.validation.df <- subset(validation.df, hour < 21 & hour > 8)
-
-# Use is_daylight to split
-# offpeak.training.df <- subset(training.df, is_daylight == 0)
-# offpeak.validation.df <- subset(validation.df, is_daylight == 0)
-# peak.training.df <- subset(training.df, is_daylight == 1)
-# peak.validation.df <- subset(validation.df, is_daylight == 1)
-
-
-# Partition biketest.df Scoring data set
-# peak.test.df <- subset(biketest.df, is_daylight == 0)
-# offpeak.test.df <- subset(biketest.df, is_daylight == 1)
-peak.test.df <- subset(biketest.df, hour < 21 & hour > 8)
-offpeak.test.df <- subset(biketest.df, hour < 9 | hour > 20)
-
 
 
 # -- Linear regression. Single, scaled variable. Partition peak & offpeak -----------
@@ -670,48 +647,54 @@ scaled.stepwise.peak.lm <- step(scaled.stepwise.peak.lm, direction = "both")
 summary(scaled.stepwise.peak.lm)
 
 # training
-scaled.peak.lm.train.pred <- predict(scaled.peak.lm, na.action = na.pass)
+pred.peak.train <- predict(scaled.peak.lm, na.action = na.pass)
 # validation
-scaled.peak.lm.valid.pred <- predict(scaled.peak.lm, newdata = peak.validation.df, na.action = na.pass)
-scaled.stepwise.peak.lm.valid.pred <- predict(scaled.stepwise.peak.lm, newdata = peak.validation.df, na.action = na.pass)
+pred.peak.valid <- predict(scaled.peak.lm, newdata = peak.validation.df, na.action = na.pass)
+pred.peak.stepwise.valid <- predict(scaled.stepwise.peak.lm, newdata = peak.validation.df, na.action = na.pass)
 # is_daylight == 1 validation RMSLE: 0.814235
 # peak/offpeak validation RMSLE: 0.602574
 # peak/offpeak validation RMSLE: 0.593473 (GAM)
 # stepwise RMSLE: 0.733343
-rmsle(peak.validation.df$count, scaled.peak.lm.valid.pred)
+rmsle(peak.validation.df$count, pred.peak.valid)
 # stepwise version
-scaled.stepwise.peak.lm.valid.pred <- negative_to_zero(scaled.stepwise.peak.lm.valid.pred)
-rmsle(peak.validation.df$count, scaled.stepwise.peak.lm.valid.pred)
+pred.peak.stepwise.valid <- negative_to_zero(pred.peak.stepwise.valid)
+rmsle(peak.validation.df$count, pred.peak.stepwise.valid)
+
+
 
 # try with just off hours
 scaled.offpeak.lm <- lm(count ~ scaled_atemp, data = offpeak.training.df, na.action = na.exclude)
 
-
 # training
-scaled.offpeak.lm.train.pred <- predict(scaled.offpeak.lm, na.action = na.pass)
+pred.offpeak.train <- predict(scaled.offpeak.lm, na.action = na.pass)
 # validation
-scaled.offpeak.lm.valid.pred <- predict(scaled.offpeak.lm, newdata = offpeak.validation.df, na.action = na.pass)
+pred.offpeak.valid <- predict(scaled.offpeak.lm, newdata = offpeak.validation.df, na.action = na.pass)
 # is_daylight == 0 validation RMSLE: 1.6016
 # peak/offpeak validation RMSLE: 1.62375
 # peak/offpeak validation RMSLE: 1.62431 (GAM)
-rmsle(offpeak.validation.df$count, scaled.offpeak.lm.valid.pred)
+rmsle(offpeak.validation.df$count, pred.offpeak.valid)
 
 # Predict test/scoring dataset
-scaled.lm.peak.test.pred <- predict(scaled.peak.lm, newdata = peak.test.df, na.action = na.pass)
-scaled.lm.offpeak.test.pred <- predict(scaled.offpeak.lm, newdata = offpeak.test.df, na.action = na.pass)
-
-peak.df <- data.frame(datetime = peak.test.df$datetime, count = scaled.lm.peak.test.pred)
-offpeak.df <- data.frame(datetime = offpeak.test.df$datetime, count = scaled.lm.offpeak.test.pred)
-
-scaled.peakoffpeak.pred.df <- rbind(peak.df, offpeak.df)
-scaled.peakoffpeak.pred.df <- scaled.peakoffpeak.pred.df[order(scaled.peakoffpeak.pred.df$datetime),]
+pred.peak.score <- predict(scaled.peak.lm, newdata = peak.test.df, na.action = na.pass)
+pred.offpeak.score <- predict(scaled.offpeak.lm, newdata = offpeak.test.df, na.action = na.pass)
+# Make two dataframes
+peak.df <- data.frame(datetime = peak.test.df$datetime, count = pred.peak.score)
+offpeak.df <- data.frame(datetime = offpeak.test.df$datetime, count = pred.offpeak.score)
+# Combine and sort by datetime
+pred.peakoffpeak.df <- rbind(peak.df, offpeak.df)
+pred.peakoffpeak.df <- pred.peakoffpeak.df[order(pred.peakoffpeak.df$datetime),]
 
 
 # write submission in kaggle format
 # datetime,count
 # 2011-01-20 00:00:00,0
-write.csv(scaled.peakoffpeak.pred.df, file = "output/scaled_lm_peak_vs_offpeak.csv", row.names=FALSE)
+write.csv(pred.peakoffpeak.df, file = "output/scaled_lm_peak_vs_offpeak.csv", row.names=FALSE)
 
+
+# remove variables
+rm(list = c('offpeak.df', 
+            'pred.peakoffpeak.df', 'pred.offpeak.score', 'pred.offpeak.train', 'pred.offpeak.valid',
+            'pred.peak.score', 'pred.peak.stepwise.valid', 'pred.peak.train', 'pred.peak.valid'))
 
 
 # -- Combined GAM and linear regression -----------
@@ -722,10 +705,10 @@ scaled.peak.gam <- gam(count ~ s(atemp), data = peak.training.df)
 summary(scaled.peak.gam)
 
 # training
-scaled.peak.gam.train.pred <- predict(scaled.peak.gam, na.action = na.pass)
+pred.peak.gam <- predict(scaled.peak.gam, na.action = na.pass)
 # validation: RMSLE 0.593473
-scaled.peak.gam.valid.pred <- predict(scaled.peak.gam, newdata = peak.validation.df, na.action = na.pass)
-rmsle(peak.validation.df$count, scaled.peak.gam.valid.pred)
+pred.peak.gam.valid <- predict(scaled.peak.gam, newdata = peak.validation.df, na.action = na.pass)
+rmsle(peak.validation.df$count, pred.peak.gam.valid)
 
 
 # Regression tree: Just off hours / nighttime
@@ -775,18 +758,6 @@ for (i in 1:nrow(hyper_grid)) {
   )
 }
 
-# function to get optimal cp
-get_cp <- function(x) {
-  min <- which.min(x$cptable[, "xerror"])
-  cp <- x$cptable[min, "CP"] 
-}
-
-# function to get minimum error
-get_min_error <- function(x) {
-  min <- which.min(x$cptable[, "xerror"])
-  xerror <- x$cptable[min, "xerror"] 
-}
-
 hyper_grid %>%
   mutate(
     cp    = purrr::map_dbl(models, get_cp),
@@ -813,16 +784,21 @@ rt.night.optimal.pred <- predict(night_optimal_tree, newdata = offpeak.validatio
 rmsle(offpeak.validation.df$count, rt.night.optimal.pred)
 
 
+# Predict Test / Scoring data
 # GAM model - peak
-scaled.peak.gam.test.pred <- predict(scaled.peak.gam, newdata = peak.test.df, na.action = na.pass)
-scaled.peak.gam.test.pred <- negative_to_zero(scaled.peak.gam.test.pred)
+pred.peak.gam.test <- predict(scaled.peak.gam, newdata = peak.test.df, na.action = na.pass)
+pred.peak.gam.test <- negative_to_zero(pred.peak.gam.test)
 # Regression tree - offpeak
-rt.night.optimal.test.pred <- predict(night_optimal_tree, newdata = offpeak.test.df, na.actin = na.pass)
+pred.offpeak.rt.test <- predict(night_optimal_tree, newdata = offpeak.test.df, na.actin = na.pass)
 
-gam.peak.df <- data.frame(datetime = peak.test.df$datetime, count = scaled.peak.gam.test.pred)
-rt.night.df <- data.frame(datetime = offpeak.test.df$datetime, count = rt.night.optimal.test.pred)
+gam.peak.df <- data.frame(datetime = peak.test.df$datetime, count = pred.peak.gam.test)
+rt.night.df <- data.frame(datetime = offpeak.test.df$datetime, count = pred.offpeak.rt.test)
 mixed.models.df <- rbind(gam.peak.df, rt.night.df)
+
 write.csv(mixed.models.df, file = "output/gam+regression_tree.csv", row.names=FALSE)
 
 
-
+# remove variables
+rm(list = c('hyper_grid', 'models', 'offpeak.test.df', 'offpeak.training.df', 'offpeak.validation.df',
+            'peak.df', 'peak.test.df', 'peak.training.df', 'peak.validation.df', 'rt.night.df',
+            'pred.peak.gam', 'pred.peak.gam.test', 'pred.peak.gam.valid', 'rt.night.optimal.pred'))

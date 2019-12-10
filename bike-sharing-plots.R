@@ -4,6 +4,7 @@
 
 # Run `bike-sharing-setup.R` first.
 # That's where the library() calls and CSV reads live.
+source('bike-sharing-setup.R')
 
 
 # All the vars for plotting. ----------------
@@ -466,7 +467,7 @@ session_any.box.data <- bikeplot.df[c('season', 'session_any', 'count')]
 session_any.box <- ggplot(session_any.box.data, aes(x = season, y = count, fill = session_any)) + 
   geom_boxplot() +
   scale_x_discrete(labels = seasons) +
-  scale_fill_manual(values = boxplot.binary.colors,) +
+  scale_fill_manual(values = boxplot.binary.colors) +
   theme(legend.position = "top") +
   labs(title = "session_any is not a proxy for season")
 

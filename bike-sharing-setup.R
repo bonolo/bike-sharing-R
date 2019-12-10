@@ -12,6 +12,7 @@ library(pastecs)
 library(reshape2)
 library(forecast)
 library(mgcv)
+library(randomForest)
 library(rpart)
 library(rpart.plot)
 library(neuralnet)
@@ -28,7 +29,11 @@ options(scipen = 100, digits = 6)
 bikeall.df <- read.csv("csv-inputs/kaggle_data_plus.csv", na.strings = "\\N", header = TRUE)
 
 # Convert a few things to factors
-# bikeall.df[,'hour']<-factor(bikeall.df[,'hour'])
+#  (but keep numeric copies of a few first)
+bikeall.df[,'house_num']<-as.numeric(bikeall.df[,'house'])
+bikeall.df[,'senate_num']<-as.numeric(bikeall.df[,'senate'])
+bikeall.df[,'session_any_num']<-as.numeric(bikeall.df[,'session_any'])
+
 bikeall.df[,'dayofweek']<-factor(bikeall.df[,'dayofweek'])
 bikeall.df[,'month']<-factor(bikeall.df[,'month'])
 bikeall.df[,'is_daylight']<-factor(bikeall.df[,'is_daylight'])
@@ -47,7 +52,6 @@ bikeall.df[,'cua_session']<-factor(bikeall.df[,'cua_session'])
 bikeall.df[,'au_session']<-factor(bikeall.df[,'au_session'])
 bikeall.df[,'howard_session']<-factor(bikeall.df[,'howard_session'])
 bikeall.df[,'session_any']<-factor(bikeall.df[,'session_any'])
-
 # -- Scaling ---------------
 # make a copy with columns we want to scale
 columns.to.scale <- c("hour", "dayofweek", "month", "season", "weather",
@@ -78,21 +82,21 @@ biketest.df <- subset(bikeall.df, train == 0)
 
 
 # -------------- Data shape & summary ----------------------------
-dim(bikeall.df)
-head(bikeall.df)
-
-stat.desc(bikeall.df)
-
-summary(bikeall.df)
-median(bikeall.df$count)
-
-str(bikeall.df)
-describe(bikeall.df)
-describe(bikeall.df$count)
-
-describe(as.factor(bikeall.df$temp))
-describe(as.factor(bikeall.df$atemp))
-describe(as.factor(bikeall.df$humidity))
-
-glimpse(bikeall.df)
+# dim(bikeall.df)
+# head(bikeall.df)
+# 
+# stat.desc(bikeall.df)
+# 
+# summary(bikeall.df)
+# median(bikeall.df$count)
+# 
+# str(bikeall.df)
+# describe(bikeall.df)
+# describe(bikeall.df$count)
+# 
+# describe(as.factor(bikeall.df$temp))
+# describe(as.factor(bikeall.df$atemp))
+# describe(as.factor(bikeall.df$humidity))
+# 
+# glimpse(bikeall.df)
 
