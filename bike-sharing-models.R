@@ -46,7 +46,7 @@ get_min_error <- function(x) {
 
 # Skipping stuff like casual/registered counts, individual sporting events/calendars.
 # Put these in a data frames used to build models.
-keeps <- c("count", "hour", "dayofweek", "month", "is_daylight", "season",
+keeps <- c("count", "hour", "dayofweek", "month", "is_daylight", "peak", "season",
            "holiday", "workingday", "weather", "temp", "temp_squared", "atemp", "humidity", 
            "windspeed", "house", "senate", "sporting_event", "session_any",
            "scaled_hour", "scaled_dayofweek", "scaled_month", "scaled_season", "scaled_weather", 
@@ -65,8 +65,6 @@ rm(keeps)
 # biketrain.df$weather <- as.factor(biketrain.df$weather)
 
 
-
-
 # ++ Partition training | validation ----------
 
 # randomly generate training and validation sets
@@ -76,27 +74,6 @@ ss <- sample(1:2, size = nrow(biketrain.df), replace = TRUE, prob = c(0.6, 0.4))
 # training.df = biketrain.df[ss==1,]
 training.df = biketrain.df
 validation.df = biketrain.df[ss==2,]
-
-
-
-# Split into peak & offpeak for relevant models
-offpeak.training.df <- subset(training.df, hour < 9 | hour > 20)
-offpeak.validation.df <- subset(validation.df, hour < 9 | hour > 20)
-peak.training.df <- subset(training.df, hour < 21 & hour > 8)
-peak.validation.df <- subset(validation.df, hour < 21 & hour > 8)
-
-# Use is_daylight to split
-# offpeak.training.df <- subset(training.df, is_daylight == 0)
-# offpeak.validation.df <- subset(validation.df, is_daylight == 0)
-# peak.training.df <- subset(training.df, is_daylight == 1)
-# peak.validation.df <- subset(validation.df, is_daylight == 1)
-  
-# Partition biketest.df Scoring data set
-# peak.test.df <- subset(biketest.df, is_daylight == 0)
-# offpeak.test.df <- subset(biketest.df, is_daylight == 1)
-peak.test.df <- subset(biketest.df, hour < 21 & hour > 8)
-offpeak.test.df <- subset(biketest.df, hour < 9 | hour > 20)
-
 
 
 # --- "Multiple linear regression". Adapted from textbook. My best-guess 10 variables. ----------
@@ -639,47 +616,47 @@ rm(list = c('hyper_grid', 'models', 'pred.valid'))
 # RMSLE 1.68000 (scored) using daylight instead of peak/offpeak
 
 # try with just daytime hours
-scaled.peak.lm <- lm(count ~ scaled_atemp, data = peak.training.df, na.action = na.exclude)
+scaled.peak.lm <- lm(count ~ scaled_atemp, data = training.df[training.df$peak == TRUE,], na.action = na.exclude)
 
 # stepwise selection version
-scaled.stepwise.peak.lm <- lm(count ~., data = peak.training.df, na.action = na.exclude)
+scaled.stepwise.peak.lm <- lm(count ~., data = training.df[training.df$peak == TRUE,], na.action = na.exclude)
 scaled.stepwise.peak.lm <- step(scaled.stepwise.peak.lm, direction = "both")
 summary(scaled.stepwise.peak.lm)
 
 # training
 pred.peak.train <- predict(scaled.peak.lm, na.action = na.pass)
 # validation
-pred.peak.valid <- predict(scaled.peak.lm, newdata = peak.validation.df, na.action = na.pass)
-pred.peak.stepwise.valid <- predict(scaled.stepwise.peak.lm, newdata = peak.validation.df, na.action = na.pass)
+pred.peak.valid <- predict(scaled.peak.lm, newdata = validation.df[validation.df$peak == TRUE,], na.action = na.pass)
+pred.peak.stepwise.valid <- predict(scaled.stepwise.peak.lm, newdata = validation.df[validation.df$peak == TRUE,], na.action = na.pass)
 # is_daylight == 1 validation RMSLE: 0.814235
 # peak/offpeak validation RMSLE: 0.602574
 # peak/offpeak validation RMSLE: 0.593473 (GAM)
 # stepwise RMSLE: 0.733343
-rmsle(peak.validation.df$count, pred.peak.valid)
+rmsle(validation.df[validation.df$peak == TRUE,]$count, pred.peak.valid)
 # stepwise version
 pred.peak.stepwise.valid <- negative_to_zero(pred.peak.stepwise.valid)
-rmsle(peak.validation.df$count, pred.peak.stepwise.valid)
+rmsle(validation.df[validation.df$peak == TRUE,]$count, pred.peak.stepwise.valid)
 
 
 
 # try with just off hours
-scaled.offpeak.lm <- lm(count ~ scaled_atemp, data = offpeak.training.df, na.action = na.exclude)
+scaled.offpeak.lm <- lm(count ~ scaled_atemp, data = training.df[training.df$peak == FALSE,], na.action = na.exclude)
 
 # training
 pred.offpeak.train <- predict(scaled.offpeak.lm, na.action = na.pass)
 # validation
-pred.offpeak.valid <- predict(scaled.offpeak.lm, newdata = offpeak.validation.df, na.action = na.pass)
+pred.offpeak.valid <- predict(scaled.offpeak.lm, newdata = validation.df[validation.df$peak == FALSE,], na.action = na.pass)
 # is_daylight == 0 validation RMSLE: 1.6016
 # peak/offpeak validation RMSLE: 1.62375
 # peak/offpeak validation RMSLE: 1.62431 (GAM)
-rmsle(offpeak.validation.df$count, pred.offpeak.valid)
+rmsle(validation.df[validation.df$peak == FALSE,]$count, pred.offpeak.valid)
 
 # Predict test/scoring dataset
-pred.peak.score <- predict(scaled.peak.lm, newdata = peak.test.df, na.action = na.pass)
-pred.offpeak.score <- predict(scaled.offpeak.lm, newdata = offpeak.test.df, na.action = na.pass)
+pred.peak.score <- predict(scaled.peak.lm, newdata = biketest.df[biketest.df$peak == TRUE,], na.action = na.pass)
+pred.offpeak.score <- predict(scaled.offpeak.lm, newdata = biketest.df[biketest.df$peak == FALSE,], na.action = na.pass)
 # Make two dataframes
-peak.df <- data.frame(datetime = peak.test.df$datetime, count = pred.peak.score)
-offpeak.df <- data.frame(datetime = offpeak.test.df$datetime, count = pred.offpeak.score)
+peak.df <- data.frame(datetime = biketest.df[biketest.df$peak == TRUE,]$datetime, count = pred.peak.score)
+offpeak.df <- data.frame(datetime = biketest.df[biketest.df$peak == FALSE,]$datetime, count = pred.offpeak.score)
 # Combine and sort by datetime
 pred.peakoffpeak.df <- rbind(peak.df, offpeak.df)
 pred.peakoffpeak.df <- pred.peakoffpeak.df[order(pred.peakoffpeak.df$datetime),]
@@ -692,8 +669,8 @@ write.csv(pred.peakoffpeak.df, file = "output/scaled_lm_peak_vs_offpeak.csv", ro
 
 
 # remove variables
-rm(list = c('offpeak.df', 
-            'pred.peakoffpeak.df', 'pred.offpeak.score', 'pred.offpeak.train', 'pred.offpeak.valid',
+rm(list = c('offpeak.df', 'peak.df', 'pred.peakoffpeak.df', 'pred.offpeak.score', 'pred.offpeak.train', 
+            'pred.offpeak.valid',
             'pred.peak.score', 'pred.peak.stepwise.valid', 'pred.peak.train', 'pred.peak.valid'))
 
 
@@ -701,14 +678,14 @@ rm(list = c('offpeak.df',
 # RMSLE: 0.89011
 
 # GAM for peak time
-scaled.peak.gam <- gam(count ~ s(atemp), data = peak.training.df)
+scaled.peak.gam <- gam(count ~ s(atemp), data = training.df[training.df$peak == TRUE,])
 summary(scaled.peak.gam)
 
 # training
 pred.peak.gam <- predict(scaled.peak.gam, na.action = na.pass)
 # validation: RMSLE 0.593473
-pred.peak.gam.valid <- predict(scaled.peak.gam, newdata = peak.validation.df, na.action = na.pass)
-rmsle(peak.validation.df$count, pred.peak.gam.valid)
+pred.peak.gam.valid <- predict(scaled.peak.gam, newdata = validation.df[validation.df$peak == TRUE,], na.action = na.pass)
+rmsle(validation.df[validation.df$peak == TRUE,]$count, pred.peak.gam.valid)
 
 
 # Regression tree: Just off hours / nighttime
@@ -716,7 +693,7 @@ rmsle(peak.validation.df$count, pred.peak.gam.valid)
 # performing regression trees
 night_tree <- rpart(
   formula = count ~ .,
-  data = offpeak.training.df,
+  data = training.df[training.df$peak == FALSE,],
   method = "anova"
 )
 
@@ -725,7 +702,7 @@ plotcp(night_tree) # Maximum size/depth of tree = 8, or so it seems.
 
 night_tree_2 <- rpart(
   formula = count ~ .,
-  data = offpeak.training.df,
+  data = training.df[training.df$peak == FALSE,],
   method = "anova",
   control = list(cp = 0, xval = 10)
 )
@@ -752,7 +729,7 @@ for (i in 1:nrow(hyper_grid)) {
   # train a model and store in the list
   models[[i]] <- rpart(
     formula = count ~ .,
-    data = offpeak.training.df,
+    data = training.df[training.df$peak == FALSE,],
     method = "anova",
     control = list(minsplit = minsplit, maxdepth = maxdepth)
   )
@@ -771,34 +748,35 @@ hyper_grid %>%
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 night_optimal_tree <- rpart(
   formula = count ~ .,
-  data = offpeak.training.df,
+  data = training.df[training.df$peak == FALSE,],
   method = "anova",
-  control = list(minsplit = 19, maxdepth = 29, cp = 0.01)
+  # control = list(minsplit = 19, maxdepth = 29, cp = 0.01)
+  control = list(minsplit = 5, maxdepth = 31, cp = 0.01)
 )
 
 rpart.plot(night_optimal_tree)
 
 # Predict against validation data
-rt.night.optimal.pred <- predict(night_optimal_tree, newdata = offpeak.validation.df)
+rt.night.optimal.pred <- predict(night_optimal_tree, newdata = validation.df[validation.df$peak == FALSE,])
 # validation: RMSLE 1.07674
-rmsle(offpeak.validation.df$count, rt.night.optimal.pred)
+rmsle(validation.df[validation.df$peak == FALSE,]$count, rt.night.optimal.pred)
 
 
 # Predict Test / Scoring data
 # GAM model - peak
-pred.peak.gam.test <- predict(scaled.peak.gam, newdata = peak.test.df, na.action = na.pass)
+pred.peak.gam.test <- predict(scaled.peak.gam, newdata = biketest.df[biketest.df$peak == TRUE,], na.action = na.pass)
 pred.peak.gam.test <- negative_to_zero(pred.peak.gam.test)
 # Regression tree - offpeak
-pred.offpeak.rt.test <- predict(night_optimal_tree, newdata = offpeak.test.df, na.actin = na.pass)
+pred.offpeak.rt.test <- predict(night_optimal_tree, newdata = biketest.df[biketest.df$peak == FALSE,], na.action = na.pass)
 
-gam.peak.df <- data.frame(datetime = peak.test.df$datetime, count = pred.peak.gam.test)
-rt.night.df <- data.frame(datetime = offpeak.test.df$datetime, count = pred.offpeak.rt.test)
+gam.peak.df <- data.frame(datetime = biketest.df[biketest.df$peak == TRUE,]$datetime, count = pred.peak.gam.test)
+rt.night.df <- data.frame(datetime = biketest.df[biketest.df$peak == FALSE,]$datetime, count = pred.offpeak.rt.test)
 mixed.models.df <- rbind(gam.peak.df, rt.night.df)
 
 write.csv(mixed.models.df, file = "output/gam+regression_tree.csv", row.names=FALSE)
 
 
 # remove variables
-rm(list = c('hyper_grid', 'models', 'offpeak.test.df', 'offpeak.training.df', 'offpeak.validation.df',
-            'peak.df', 'peak.test.df', 'peak.training.df', 'peak.validation.df', 'rt.night.df',
-            'pred.peak.gam', 'pred.peak.gam.test', 'pred.peak.gam.valid', 'rt.night.optimal.pred'))
+rm(list = c('hyper_grid', 'models', 'mixed.models.df', 'gam.peak.df', 'rt.night.df',
+            'pred.peak.gam', 'pred.peak.gam.test', 'pred.peak.gam.valid',
+            'rt.night.optimal.pred'))

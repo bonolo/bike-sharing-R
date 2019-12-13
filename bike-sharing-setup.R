@@ -28,6 +28,14 @@ options(scipen = 100, digits = 6)
 
 bikeall.df <- read.csv("csv-inputs/kaggle_data_plus.csv", na.strings = "\\N", header = TRUE)
 
+# Set `peak` binary predictor
+bikeall.df$peak <- bikeall.df$hour > 8 & bikeall.df$hour < 21
+
+# derive a column which is true if either house or senate is true.
+bikeall.df$congress_both <- ifelse(bikeall.df$house == '1' | bikeall.df$senate == '1', 1, 0)
+bikeall.df[,'congress_both'] <- factor(bikeall.df[,'congress_both'])
+
+
 # Convert a few things to factors
 #  (but keep numeric copies of a few first)
 bikeall.df[,'house_num']<-as.numeric(bikeall.df[,'house'])
