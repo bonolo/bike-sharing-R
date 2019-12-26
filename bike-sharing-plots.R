@@ -84,10 +84,10 @@ hour.tile.data <- summarise(hour.tile.data, mean_count = mean(count))
 
 hour.day.tile <- ggplot(hour.tile.data, aes(hour, dayofweek)) +
   geom_tile(aes(fill = mean_count)) +
-  scale_fill_gradient(low = "white", high = "black") +
+  # geom_text(aes(label = round(mean_count, 0))) + 
+  scale_fill_gradient(low = "white", high = "red") +
   scale_y_discrete(labels = days.of.week, breaks = c(7, 6, 5, 4, 3, 2, 1)) +
   scale_x_continuous(breaks = seq(0, 24, 3)) +
-  # theme_classic() +
   theme(legend.position="top") +
   labs(title = "Heatmap: mean_count")
 hour.day.tile
@@ -100,6 +100,7 @@ hour.scatter2 <- ggplot(bikeplot.df, aes(hour, count, color = workingday)) +
   geom_smooth(se = FALSE) +
   geom_point(aes(x = jitter(hour, 2), y = count),
              pch = 16, alpha = 0.1) + 
+  geom_hline(yintercept = 145) +
   scale_y_sqrt() +
   scale_color_manual(values = workingday.colors) +
   theme(legend.position="top") +
@@ -176,6 +177,14 @@ ggplot(data = temp.histo.data, aes(x = temp)) +
   geom_bar(alpha = 0.5, color = "grey33", fill = "red3") + 
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   labs(title = "Histogram: temp")
+
+# facet_grid: atemp vs count, grouped by workingday and peak/offpeak
+ggplot(bikeplot.df, aes(atemp, count)) +
+  geom_point(aes(x = jitter(atemp, 2)), pch = 16, color = "orange", alpha = 0.2) +
+  geom_smooth(se = FALSE) +
+  facet_grid(workingday ~ peak, labeller = label_both) +
+  labs(title = 'atemp, peak, workingday')
+
 
 
 # Scatter Plots: Count by Temperature with mean usage trendline
@@ -282,6 +291,16 @@ humidity.weather.scatter <- ggplot() +
 
 humidity.weather.scatter
 
+
+# facet_grid: humidity vs count, grouped by workingday and peak/offpeak
+ggplot(bikeplot.df, aes(humidity, count)) +
+  geom_point(aes(x = jitter(humidity, 2), colour = bikeplot.df$weather), pch = 16, alpha = 0.2) +
+  geom_smooth(se = FALSE) +
+  scale_color_manual(values = weather.colors) +
+  facet_grid(workingday ~ peak, labeller = label_both) +
+  labs(title = 'humidity, peak, workingday, weather', colour = "weather")
+
+
 # Humidity by hour Scatterplot w/ mean trendline
 data.for.plot <- setNames(aggregate(bikeplot.df$humidity, 
                                     by = list(bikeplot.df$hour),
@@ -324,7 +343,7 @@ windspeed.scatter <- ggplot() +
              alpha = 0.2) + 
   scale_y_sqrt() +
   # scale_color_manual(values=weather.colors) + 
-  labs(x = "Wind Speed (units not provided)", y = "count", title = "count by Wind Speed - with mean count trendline") +
+  labs(x = "windspeed (units not provided)", y = "count", title = "count by windspeed - with mean count trendline") +
   geom_line(data = mean.windspeed.count, aes(x = windspeed, y = meancount), size = 1, color = "grey28") +
   geom_smooth(data = mean.windspeed.count, aes(x = windspeed, y = meancount), color = "red3", se = FALSE)
 
