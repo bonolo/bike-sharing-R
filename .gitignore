@@ -1,16 +1,16 @@
-xlsx+raw-csv-inputs/
-csv-inputs/*.zip
-csv-inputs/*.csv
-.Rhistory
-.RData
-Project Requirements Fall 2019.pdf alias
-data-sources-kevin-cullen.md
-dataminingbook.com R code
 .DS_Store
 .DS_Store?
-.Trashes
+.RData
+.Rhistory
 .Rproj.user
+.Trashes
+Project Requirements Fall 2019.pdf alias
 bike-sharing.Rproj
+csv-inputs/*.csv
+csv-inputs/*.zip
+data-sources-kevin-cullen.md
+dataminingbook.com R code
 final-report-kevin-cullen-cis575-fall-2019-BBEditPreviewTemp.md.html
 final-report-kevin-cullen-cis575-fall-2019.pdf
 predictions-for-kaggle.zip
+xlsx+raw-csv-inputs/
