@@ -11,7 +11,7 @@ Tools used
 
 - R and RStudio
 - MySQL / SQL
-- Hitachi Vantara Pentaho PDI (ETL) (not needed to run this project)
+- Hitachi Vantara Pentaho PDI (ETL) (not needed to run this repo)
 - MS Excel
 
 
@@ -19,23 +19,24 @@ Tools used
 
 I taught myself R by developing predictive models for the Kaggle "Bike Sharing Demand" competition, originally as a topic for my final project in a data mining course at Colorado State University: <https://www.kaggle.com/c/bike-sharing-demand/overview>.
 
-CIS 575 was taught via SAS Enterprise Miner, but I because I was allowed to use R on the final project, I chose to teach myself R and R's versions of the machine learning tools I was using in my SAS EM assignments.
+CIS 575 was taught via SAS Enterprise Miner. Because I was allowed to use R on the final project, I chose to teach myself R and its versions of the machine learning tools I was using in my SAS EM assignments.
 
 This long-finished Kaggle competition is a prediction/forecasting exercise. I used a combination of models to predict demand for a bike sharing business:
 - regression (linear, gam, multiple)
 - neural networks
 - regression trees
 - random forests
+- ensembles
 
 This was a time series forecasting problem, but I was unable to treat it as such because...
 - There were large chronological gaps in the data.
 - The course only touched upon forecasting.
 - I hadn't yet learned to impute time series values.
 
-I decided to hunt down more predictive variables to add to the time series.
-1. I got a chance to do a bit of ETL, cleaning, etc.
-1. The Kaggle data is mostly weather-related and difficult to know more than a few days in advance.
-1. I was new to machine learning and thought I might need more than newbie modeling skills to get decent results.
+I decided to hunt down more predictive variables to add to the time series because...
+- I got a chance to do a bit of ETL, cleaning, etc.
+- The Kaggle data is mostly weather-related and difficult to know more than a few days in advance.
+- I was new to machine learning and thought I might need more than newbie modeling skills to get decent results.
 
 ## 2. Predicting demand (`count`)
 
@@ -76,7 +77,7 @@ Kaggle specifies Root Mean Squared Logarithmic Error (RMSLE), which seems ideal 
 
 - `count` has a wide range
 - The heavily right-tailed distribution means percentage errors are more important than absolute value.
-- A bike sharing scheme would probably want to penalize under estimates more than over estimates.
+- A bike sharing scheme would probably want to penalize under-estimates more than over-estimates.
 - Both the predicted and the actual can be big numbers, in which cases RMSLE doesn't penalize big differences.
 
 ## 3. Data
@@ -166,7 +167,7 @@ Gathered from: <https://en.wikipedia.org/wiki/2011_D.C._United_season>
 
 
 
-## 4. Data exploration [Plots]
+## 4. Data exploration (Plots)
 
 Related file(s)
 
