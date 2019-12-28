@@ -1,6 +1,5 @@
 # -- Plots ---------------
-# CIS 575 Final Project : Fall 2019
-# Kevin F Cullen (solo)
+# Kevin F Cullen
 
 # Run `bike-sharing-setup.R` first.
 # That's where the library() calls and CSV reads live.

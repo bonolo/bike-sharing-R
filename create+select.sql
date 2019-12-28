@@ -336,6 +336,3 @@ ON MID(kaggle_data.`datetime`, 6, 5) = MID(sunrise_sunset.Date, 6, 5);
 
 select date from sunrise_sunset;
 
-
-
-

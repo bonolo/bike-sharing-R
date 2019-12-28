@@ -1,6 +1,5 @@
 # -- Models ---------------
-# CIS 575 Final Project : Fall 2019
-# Kevin F Cullen (solo)
+# Kevin F Cullen
 
 # Run `bike-sharing-setup.R` first.
 # That's where the library() calls and CSV reads live.
@@ -45,10 +44,10 @@ get_min_error <- function(x) {
 # -- Keep only variables we would use for predictions. ----------
 
 # Skipping stuff like casual/registered counts, individual sporting events/calendars.
-# Put these in a data frames used to build models.
-keeps <- c("count", "hour", "dayofweek", "month", "is_daylight", "peak", "season",
+# Put these in a data frame.
+keeps <- c("count", "hour", "dayofweek", "month", "is_daylight", "peak", 'peak_alt', "season",
            "holiday", "workingday", "weather", "temp", "temp_squared", "atemp", "humidity", 
-           "windspeed", "house", "senate", "sporting_event", "session_any",
+           "windspeed", "house", "senate", "congress_both", "sporting_event", "session_any",
            "scaled_hour", "scaled_dayofweek", "scaled_month", "scaled_season", "scaled_weather", 
            "scaled_temp", "scaled_temp_squared", "scaled_atemp", "scaled_humidity", "scaled_windspeed",
            "house_num", "senate_num", "session_any_num")
@@ -398,9 +397,13 @@ predict_scoring_set(optimal_tree, "output/regression_tree_optimal.csv")
 
 
 
-# -- random forest??? --------------------------------------
+# -- random forest --------------------------------------
+
 vars_to_use <- c('count', 'hour', 'month', 'is_daylight', 'workingday', 'atemp', 'senate',
                  'session_any')
+# RMSLE was worse (.71) when using peak_alt instead of is_daylight
+# vars_to_use <- c('count', 'hour', 'month', 'peak_alt', 'workingday', 'atemp', 'senate',
+#                  'session_any')
 rf_train.df <- subset(training.df, select = vars_to_use)
 rf_valid.df <- subset(validation.df, select = vars_to_use)
 
@@ -607,7 +610,7 @@ rm(list = c('hyper_grid', 'models', 'pred.valid'))
 
 
 
-# ++ Split models. Partitioned by peak & offpeak -----------
+# ++ Ensemble models. Partitioned by peak & offpeak -----------
 # or is_daylight 1, 0
 
 
@@ -674,8 +677,15 @@ rm(list = c('offpeak.df', 'peak.df', 'pred.peakoffpeak.df', 'pred.offpeak.score'
             'pred.peak.score', 'pred.peak.stepwise.valid', 'pred.peak.train', 'pred.peak.valid'))
 
 
-# -- Combined GAM and linear regression -----------
+# -- Combined GAM and regression tree -----------
 # RMSLE: 0.89011
+# I pushed the RMSLE down to 0.79787 by using the 'peak_alt' 
+# (day/hour combinations when usage is typically above median)
+
+# So I don't have to rewrite everything...
+# training.df$peak <- training.df$peak_alt
+# validation.df$peak <- validation.df$peak_alt
+# biketest.df$peak <- biketest.df$peak
 
 # GAM for peak time
 scaled.peak.gam <- gam(count ~ s(atemp), data = training.df[training.df$peak == TRUE,])
